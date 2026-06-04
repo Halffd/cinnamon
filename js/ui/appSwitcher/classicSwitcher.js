@@ -7,7 +7,6 @@ const St = imports.gi.St;
 const Meta = imports.gi.Meta;
 const Pango = imports.gi.Pango;
 const Cinnamon = imports.gi.Cinnamon;
-const GLib = imports.gi.GLib;
 const Signals = imports.signals;
 const Mainloop = imports.mainloop;
 
@@ -15,23 +14,6 @@ const AppSwitcher = imports.ui.appSwitcher.appSwitcher;
 const Main = imports.ui.main;
 
 const WindowUtils = imports.misc.windowUtils;
-
-let _debugLog = (function() {
-    let path = null;
-    return function(msg) {
-        try {
-            if (!path) {
-                path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
-            }
-            let existing = '';
-            try {
-                let [ok, contents] = GLib.file_get_contents(path);
-                if (ok) existing = contents;
-            } catch(e) {}
-            GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
-        } catch(e) {}
-    };
-})();
 
 // easing durations (ms)
 const POPUP_SCROLL_TIME = 100;
@@ -49,8 +31,9 @@ const iconSizes = [96, 64, 48];
 const WINDOW_GRID_ICON_SIZE = 24;
 const WINDOW_GRID_ICON_PADDING = 4;
 const WINDOW_GRID_GAP = 16;
-const WINDOW_GRID_COLS_MAX = 4;
+const WINDOW_GRID_COLS_MAX = 3;
 const WINDOW_GRID_SCALE = 0.92;
+const WINDOW_GRID_SELECTED_BORDER = 13;
 
 function mod(a, b) {
     return (a + b) % b;
@@ -66,8 +49,6 @@ ClassicSwitcher.prototype = {
     _init: function() {
         AppSwitcher.AppSwitcher.prototype._init.apply(this, arguments);
 
-        _debugLog('ClassicSwitcher._init: windows=' + this._windows.length);
-
         this.actor = new Cinnamon.GenericContainer({ name: 'altTabPopup', 
                                                   reactive: true,
                                                   visible: false });
@@ -82,10 +63,8 @@ ClassicSwitcher.prototype = {
         Main.uiGroup.add_actor(this.actor);
 
         if (!this._setupModal()) {
-            _debugLog('ClassicSwitcher._init: _setupModal FAILED');
             return;
         }
-        _debugLog('ClassicSwitcher._init: _setupModal OK');
             
         let styleSettings = global.settings.get_string("alttab-switcher-style");
         let features = styleSettings.split('+');
@@ -99,7 +78,6 @@ ClassicSwitcher.prototype = {
         this._showIconAndThumbnails = this._thumbnailsEnabled && this._iconsEnabled;
         this._useWindowGrid = this._showThumbnails;
 
-        _debugLog('ClassicSwitcher._init: style=' + styleSettings + ' icons=' + this._iconsEnabled + ' thumbnails=' + this._thumbnailsEnabled + ' preview=' + this._previewEnabled + ' useWindowGrid=' + this._useWindowGrid);
 
         this._updateList(0);
 
@@ -182,7 +160,6 @@ ClassicSwitcher.prototype = {
     },
 
     _show: function() {
-        _debugLog('ClassicSwitcher._show');
         Main.panelManager.panels.forEach(function(panel) { panel.actor.set_reactive(false); });
         
         this.actor.opacity = 255;
@@ -514,6 +491,7 @@ ClassicSwitcher.prototype = {
     },
 
     _appActivated : function(appSwitcher, n) {
+        this._currentIndex = n;
         this._activateSelected();
     },
 
@@ -1175,7 +1153,6 @@ function WindowGrid(windows, activeMonitor) {
 
 WindowGrid.prototype = {
     _init: function(windows, activeMonitor) {
-        _debugLog('WindowGrid._init: windows=' + windows.length);
         this.actor = new Cinnamon.GenericContainer({ name: 'window-grid', reactive: true });
         this.actor.connect('get-preferred-width', Lang.bind(this, this._getPreferredWidth));
         this.actor.connect('get-preferred-height', Lang.bind(this, this._getPreferredHeight));
@@ -1192,6 +1169,7 @@ WindowGrid.prototype = {
         this._itemWidth = 0;
         this._itemHeight = 0;
         this._rowHeight = 0;
+        this._cloneBuildNeeded = true;
 
         for (let i = 0; i < windows.length; i++) {
             let itemContainer = new St.Widget({ name: 'window-grid-item', reactive: true });
@@ -1211,6 +1189,14 @@ WindowGrid.prototype = {
             itemContainer._cloneWidget = cloneWidget;
             itemContainer._appIcon = icon;
             itemContainer._metaWindow = windows[i];
+
+            let overlay = new St.Widget({
+                reactive: false,
+                style: 'border: ' + WINDOW_GRID_SELECTED_BORDER + 'px solid rgba(120, 210, 160, 0.9);'
+            });
+            overlay.hide();
+            itemContainer.add_actor(overlay);
+            itemContainer._selectionOverlay = overlay;
 
             let idx = i;
             itemContainer.connect('button-press-event', Lang.bind(this, function() {
@@ -1234,8 +1220,6 @@ WindowGrid.prototype = {
             function() { _drawArrow(this._downArrow, St.Side.BOTTOM); }));
         this.actor.add_actor(this._upArrow);
         this.actor.add_actor(this._downArrow);
-
-        this._buildClones();
     },
 
     _buildClones: function() {
@@ -1289,6 +1273,11 @@ WindowGrid.prototype = {
         let nWindows = this._items.length;
         if (nWindows === 0)
             return;
+
+        if (this._cloneBuildNeeded) {
+            this._buildClones();
+            this._cloneBuildNeeded = false;
+        }
 
         let cols = Math.min(WINDOW_GRID_COLS_MAX, nWindows);
         let rows = Math.ceil(nWindows / cols);
@@ -1351,6 +1340,13 @@ WindowGrid.prototype = {
             iconBox.x2 = iconBox.x1 + WINDOW_GRID_ICON_SIZE;
             iconBox.y2 = iconBox.y1 + WINDOW_GRID_ICON_SIZE;
             this._items[i]._appIcon.allocate(iconBox, flags);
+
+            let overlayBox = new Clutter.ActorBox();
+            overlayBox.x1 = 0;
+            overlayBox.y1 = 0;
+            overlayBox.x2 = itemW;
+            overlayBox.y2 = itemH;
+            this._items[i]._selectionOverlay.allocate(overlayBox, flags);
         }
 
         this.actor.set_clip(gridOffsetX, gridOffsetY, availWidth, availHeight);
@@ -1416,23 +1412,19 @@ WindowGrid.prototype = {
 
     highlight: function(index, justOutline) {
         if (this._highlighted !== -1 && this._highlighted < this._items.length) {
-            this._items[this._highlighted].remove_style_pseudo_class('selected');
-            this._items[this._highlighted].remove_style_pseudo_class('outlined');
-            this._items[this._highlighted].set_style('');
+            this._items[this._highlighted]._selectionOverlay.hide();
         }
 
         this._highlighted = index;
 
         if (index >= 0 && index < this._items.length) {
-            if (justOutline)
-                this._items[index].add_style_pseudo_class('outlined');
-            else {
-                this._items[index].add_style_pseudo_class('selected');
-                this._items[index].set_style('border: 8px solid rgba(0, 0, 139, 0.9);');
-            }
+            this._items[index]._selectionOverlay.show();
         }
 
         this._ensureItemVisible(index);
+
+        if (this._rowHeight > 0)
+            this.actor.queue_relayout();
     },
 
     _onItemClicked: function(index) {

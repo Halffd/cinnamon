@@ -21,15 +21,6 @@ const {CoverflowSwitcher} = imports.ui.appSwitcher.coverflowSwitcher;
 const {TimelineSwitcher} = imports.ui.appSwitcher.timelineSwitcher;
 const {ClassicSwitcher} = imports.ui.appSwitcher.classicSwitcher;
 
-function _debugLog(msg) {
-    try {
-        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
-        let existing = '';
-        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
-        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
-    } catch(e) {}
-}
-
 // maps org.cinnamon window-effect-speed
 const WINDOW_ANIMATION_TIME_MULTIPLIERS = [
     1.4, // 0 SLOW
@@ -1356,14 +1347,11 @@ var WindowManager = class WindowManager {
 
     _createAppSwitcher(binding) {
         let windows = AppSwitcher.getWindowsForBinding(binding);
-        _debugLog('_createAppSwitcher: binding=' + binding.get_name() + ' windows=' + windows.length);
         if (windows.length === 0) {
-            _debugLog('_createAppSwitcher: no windows, aborting');
             return;
         }
 
         let style = global.settings.get_string('alttab-switcher-style');
-        _debugLog('_createAppSwitcher: style=' + style);
         switch (style) {
         case 'coverflow':
             new CoverflowSwitcher(binding);
@@ -1423,7 +1411,6 @@ var WindowManager = class WindowManager {
             return;
         }
         if (bindingName === 'toggle-window-selection') {
-            _debugLog('toggle-window-selection: overview.visible=' + Main.overview.visible + ' expo.visible=' + Main.expo.visible);
             if (Main.overview.visible || Main.expo.visible) {
                 Main.overview.hide();
                 Main.expo.hide();

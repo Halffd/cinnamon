@@ -18,15 +18,6 @@ const PointerTracker = imports.misc.pointerTracker;
 const GridNavigator = imports.misc.gridNavigator;
 const WindowUtils = imports.misc.windowUtils;
 
-function _debugLog(msg) {
-    try {
-        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
-        let existing = '';
-        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
-        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
-    } catch(e) {}
-}
-
 const WINDOW_DND_SIZE = 256;
 
 const CLOSE_BUTTON_FADE_TIME = 100;
@@ -474,7 +465,6 @@ var WorkspaceMonitor = GObject.registerClass(
 class WorkspaceMonitor extends Clutter.Actor {
     _init(metaWorkspace, monitorIndex, workspace) {
         super._init({ layout_manager: new Clutter.FixedLayout() });
-        _debugLog('WorkspaceMonitor._init: monitorIndex=' + monitorIndex + ' workspace=' + (metaWorkspace ? metaWorkspace.index() : 'null'));
         this.set_size(0, 0);
         this._myWorkspace = workspace;
 
@@ -687,7 +677,6 @@ class WorkspaceMonitor extends Clutter.Actor {
      */
     positionWindows(flags) {
         if (Main.expo.visible) {
-            _debugLog('WorkspaceMonitor.positionWindows: expo visible, skipping');
             return;
         }
 
@@ -697,7 +686,6 @@ class WorkspaceMonitor extends Clutter.Actor {
         let animate = flags & WindowPositionFlags.ANIMATE;
 
         let clones = this._windows;
-        _debugLog('WorkspaceMonitor.positionWindows: clones=' + clones.length + ' init=' + !!initialPositioning + ' animate=' + !!animate);
         // Start the animations
         let slots = this._computeAllWindowSlots(clones.length);
 
@@ -945,7 +933,6 @@ class WorkspaceMonitor extends Clutter.Actor {
     }
 
     zoomToOverview() {
-        _debugLog('WorkspaceMonitor.zoomToOverview: windows=' + this._windows.length + ' monitor=' + this.monitorIndex);
         let animate = Main.animations_enabled;
 
         if (Main.overview.animationInProgress && animate)
@@ -957,7 +944,6 @@ class WorkspaceMonitor extends Clutter.Actor {
     }
 
     zoomFromOverview() {
-        _debugLog('WorkspaceMonitor.zoomFromOverview: leavingOverview=' + this.leavingOverview + ' monitor=' + this.monitorIndex);
         let currentWorkspace = global.workspace_manager.get_active_workspace();
 
         this.leavingOverview = true;
@@ -1267,7 +1253,6 @@ var Workspace = GObject.registerClass({
 }, class Workspace extends Clutter.Actor {
     _init(metaWorkspace, view) {
         super._init({ layout_manager: new Clutter.FixedLayout() });
-        _debugLog('Workspace._init: metaWorkspace=' + (metaWorkspace ? metaWorkspace.index() : 'null'));
         this.set_size(0, 0);
         this.metaWorkspace = metaWorkspace;
         this.myView = view;

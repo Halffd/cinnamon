@@ -3,20 +3,10 @@
 const Clutter = imports.gi.Clutter;
 const GObject = imports.gi.GObject;
 const Cinnamon = imports.gi.Cinnamon;
-const GLib = imports.gi.GLib;
 const St = imports.gi.St;
 
 const Main = imports.ui.main;
 const Workspace = imports.ui.workspace;
-
-function _debugLog(msg) {
-    try {
-        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
-        let existing = '';
-        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
-        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
-    } catch(e) {}
-}
 
 var WORKSPACE_SWITCH_TIME = 250;
 
@@ -36,7 +26,6 @@ var WorkspacesView = GObject.registerClass(
 class WorkspacesView extends St.Widget {
     _init(workspaces) {
         super._init({ style_class: 'workspaces-view' });
-        _debugLog('WorkspacesView._init: nWorkspaces=' + global.workspace_manager.n_workspaces);
         this.set_size(0, 0);
 
         this.connect('destroy', this._onDestroy.bind(this));
@@ -140,7 +129,6 @@ class WorkspacesView extends St.Widget {
     }
 
     hide() {
-        _debugLog('WorkspacesView.hide');
         let activeWorkspaceIndex = global.workspace_manager.get_active_workspace_index();
         let activeWorkspace = this._workspaces[activeWorkspaceIndex];
 

@@ -5,20 +5,10 @@ const Gtk = imports.gi.Gtk;
 const Meta = imports.gi.Meta;
 const St = imports.gi.St;
 const Cinnamon = imports.gi.Cinnamon;
-const GLib = imports.gi.GLib;
 
 const Main = imports.ui.main;
 const MessageTray = imports.ui.messageTray;
 const WorkspacesView = imports.ui.workspacesView;
-
-function _debugLog(msg) {
-    try {
-        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
-        let existing = '';
-        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
-        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
-    } catch(e) {}
-}
 // ***************
 // This shows all of the windows on the current workspace
 // ***************
@@ -229,10 +219,8 @@ var Overview = GObject.registerClass({
 
     show() {
         if (this._shown || this.animationInProgress) {
-            _debugLog('Overview.show: skipping _shown=' + this._shown + ' animating=' + this.animationInProgress);
             return;
         }
-        _debugLog('Overview.show: proceeding');
         // Do this manually instead of using _syncInputMode, to handle failure
         if (!Main.pushModal(this._group, undefined, undefined, Cinnamon.ActionMode.OVERVIEW,
                             () => this._dismissGrab()))
@@ -247,10 +235,8 @@ var Overview = GObject.registerClass({
 
     _animateVisible() {
         if (this.visible || this.animationInProgress) {
-            _debugLog('Overview._animateVisible: skipping visible=' + this.visible + ' animating=' + this.animationInProgress);
             return;
         }
-        _debugLog('Overview._animateVisible: proceeding');
 
         // The main BackgroundActor is inside global.window_group which is
         // hidden when displaying the overview, so we create a new
