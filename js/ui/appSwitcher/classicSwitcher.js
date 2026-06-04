@@ -28,6 +28,13 @@ const PREVIEW_DELAY_TIMEOUT = 0;
 const THUMBNAIL_DEFAULT_SIZE = 256;
 const iconSizes = [96, 64, 48];
 
+const WINDOW_GRID_ITEM_WIDTH = 600;
+const WINDOW_GRID_ITEM_PADDING = 8;
+const WINDOW_GRID_ICON_SIZE = 24;
+const WINDOW_GRID_ICON_PADDING = 4;
+const WINDOW_GRID_MARGIN = 16;
+const WINDOW_GRID_SLOT_FRACTION = 0.99;
+
 function mod(a, b) {
     return (a + b) % b;
 }
@@ -49,6 +56,9 @@ ClassicSwitcher.prototype = {
         this._thumbnailTimeoutId = 0;
         this.thumbnailsVisible = false;
         this._displayPreviewTimeoutId = 0;
+        this._windowGrid = null;
+        this._gridActId = 0;
+        this._gridEnterId = 0;
 
         Main.uiGroup.add_actor(this.actor);
 
@@ -65,6 +75,7 @@ ClassicSwitcher.prototype = {
 
         this._showThumbnails = this._thumbnailsEnabled && !this._iconsEnabled;
         this._showIconAndThumbnails = this._thumbnailsEnabled && this._iconsEnabled;
+        this._useWindowGrid = this._showThumbnails;
         
         this._updateList(0);
 
@@ -95,6 +106,15 @@ ClassicSwitcher.prototype = {
     _allocate: function (actor, box, flags) {
         let childBox = new Clutter.ActorBox();
         let monitor = this._activeMonitor;
+
+        if (this._useWindowGrid && this._windowGrid) {
+            childBox.x1 = monitor.x;
+            childBox.y1 = monitor.y;
+            childBox.x2 = monitor.x + monitor.width;
+            childBox.y2 = monitor.y + monitor.height;
+            this._windowGrid.actor.allocate(childBox, flags);
+            return;
+        }
 
         let leftPadding = this.actor.get_theme_node().get_padding(St.Side.LEFT);
         let rightPadding = this.actor.get_theme_node().get_padding(St.Side.RIGHT);
@@ -171,30 +191,58 @@ ClassicSwitcher.prototype = {
     _updateList: function(direction) {
         if(direction !== 0)
             return;
-        
-        if (this._appList) {
-            if (this._applist_act_id !== 0) {
-                this._appList.disconnect(this._applist_act_id);
-                this._applist_act_id = 0;
-            }
-            if (this._applist_enter_id !== 0) {
-                this._appList.disconnect(this._applist_enter_id);
-                this._applist_enter_id = 0;
+
+        if (this._useWindowGrid) {
+            if (this._windowGrid) {
+                if (this._gridActId > 0) {
+                    this._windowGrid.disconnect(this._gridActId);
+                    this._gridActId = 0;
+                }
+                if (this._gridEnterId > 0) {
+                    this._windowGrid.disconnect(this._gridEnterId);
+                    this._gridEnterId = 0;
+                }
+                this._windowGrid.destroy();
+                this._windowGrid = null;
             }
             this._clearPreview();
-            this._destroyThumbnails();
-            this.actor.remove_actor(this._appList.actor);
-            this._appList.actor.destroy();
+            this._windowGrid = new WindowGrid(this._windows, this._activeMonitor);
+            this.actor.add_actor(this._windowGrid.actor);
+            this._windowGrid.actor.opacity = 0;
+            this._windowGrid.actor.ease({
+                opacity: 255,
+                duration: THUMBNAIL_FADE_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD
+            });
+            this._gridActId = this._windowGrid.connect('item-activated', Lang.bind(this, this._appActivated));
+            this._gridEnterId = this._windowGrid.connect('item-entered', Lang.bind(this, this._appEntered));
+            this._appList = null;
+            this._appIcons = [];
+        } else {
+            if (this._appList) {
+                if (this._applist_act_id !== 0) {
+                    this._appList.disconnect(this._applist_act_id);
+                    this._applist_act_id = 0;
+                }
+                if (this._applist_enter_id !== 0) {
+                    this._appList.disconnect(this._applist_enter_id);
+                    this._applist_enter_id = 0;
+                }
+                this._clearPreview();
+                this._destroyThumbnails();
+                this.actor.remove_actor(this._appList.actor);
+                this._appList.actor.destroy();
+            }
+            this._appList = new AppList(this._windows, this._showThumbnails, this._activeMonitor);
+            this.actor.add_actor(this._appList.actor);
+            if (!this._iconsEnabled && !this._thumbnailsEnabled) {
+                this._appList.actor.hide();
+            }
+            this._applist_act_id = this._appList.connect('item-activated', Lang.bind(this, this._appActivated));
+            this._applist_enter_id = this._appList.connect('item-entered', Lang.bind(this, this._appEntered));
+
+            this._appIcons = this._appList.icons;
         }
-        this._appList = new AppList(this._windows, this._showThumbnails, this._activeMonitor);
-        this.actor.add_actor(this._appList.actor);
-        if (!this._iconsEnabled && !this._thumbnailsEnabled) {
-            this._appList.actor.hide();
-        }
-        this._applist_act_id = this._appList.connect('item-activated', Lang.bind(this, this._appActivated));
-        this._applist_enter_id = this._appList.connect('item-entered', Lang.bind(this, this._appEntered));
-        
-        this._appIcons = this._appList.icons;
         this.actor.get_allocation_box();
     },
 
@@ -214,6 +262,162 @@ ClassicSwitcher.prototype = {
         }
     },
 
+    _gridSelectNextCol: function() {
+        if (!this._windowGrid || this._windowGrid._gridCols <= 0) {
+            this._selectNext();
+            return;
+        }
+        let cols = this._windowGrid._gridCols;
+        let total = this._windows.length;
+        let col = this._currentIndex % cols;
+        let row = Math.floor(this._currentIndex / cols);
+        col = col + 1;
+        let newIndex = row * cols + col;
+        if (newIndex >= total || col >= cols) {
+            col = 0;
+            row = (row + 1) % this._windowGrid._gridRows;
+            newIndex = row * cols + col;
+        }
+        if (newIndex >= total)
+            newIndex = 0;
+        this._currentIndex = newIndex;
+    },
+
+    _gridSelectPrevCol: function() {
+        if (!this._windowGrid || this._windowGrid._gridCols <= 0) {
+            this._selectPrevious();
+            return;
+        }
+        let cols = this._windowGrid._gridCols;
+        let total = this._windows.length;
+        let col = this._currentIndex % cols;
+        let row = Math.floor(this._currentIndex / cols);
+        col = col - 1;
+        if (col < 0) {
+            row = (row - 1 + this._windowGrid._gridRows) % this._windowGrid._gridRows;
+            let rowStart = row * cols;
+            let rowEnd = Math.min(rowStart + cols - 1, total - 1);
+            col = rowEnd - rowStart;
+        }
+        let newIndex = row * cols + col;
+        if (newIndex >= total)
+            newIndex = total - 1;
+        this._currentIndex = newIndex;
+    },
+
+    _gridSelectNextRow: function() {
+        if (!this._windowGrid || this._windowGrid._gridCols <= 0) {
+            this._selectNext();
+            return;
+        }
+        let cols = this._windowGrid._gridCols;
+        let total = this._windows.length;
+        let col = this._currentIndex % cols;
+        let row = Math.floor(this._currentIndex / cols);
+        let nextRow = (row + 1) % this._windowGrid._gridRows;
+        let newIndex = nextRow * cols + col;
+        if (newIndex >= total)
+            newIndex = total - 1;
+        this._currentIndex = newIndex;
+    },
+
+    _gridSelectPrevRow: function() {
+        if (!this._windowGrid || this._windowGrid._gridCols <= 0) {
+            this._selectPrevious();
+            return;
+        }
+        let cols = this._windowGrid._gridCols;
+        let total = this._windows.length;
+        let col = this._currentIndex % cols;
+        let row = Math.floor(this._currentIndex / cols);
+        let prevRow = (row - 1 + this._windowGrid._gridRows) % this._windowGrid._gridRows;
+        let newIndex = prevRow * cols + col;
+        if (newIndex >= total)
+            newIndex = total - 1;
+        this._currentIndex = newIndex;
+    },
+
+    _keyPressEvent: function(actor, event) {
+        if (this._useWindowGrid && this._windowGrid) {
+            let modifiers = Cinnamon.get_event_state(event);
+            let symbol = event.get_key_symbol();
+            let keycode = event.get_key_code();
+            let action = global.display.get_keybinding_action(keycode, modifiers);
+
+            this._disableHover();
+
+            if (modifiers & Clutter.ModifierType.CONTROL_MASK &&
+                (symbol === Clutter.KEY_Right || symbol === Clutter.KEY_Left)) {
+                if (this._switchWorkspace(symbol))
+                    return true;
+            }
+
+            switch (symbol) {
+            case Clutter.KEY_Escape:
+                this.destroy();
+                return true;
+            case Clutter.KEY_Return:
+            case Clutter.KEY_KP_Enter:
+                this._activateSelected();
+                return true;
+            case Clutter.KEY_d:
+            case Clutter.KEY_D:
+                this._showDesktop();
+                return true;
+            case Clutter.KEY_Right:
+                if (this._checkSwitchTime()) {
+                    this._gridSelectNextCol();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            case Clutter.KEY_Left:
+                if (this._checkSwitchTime()) {
+                    this._gridSelectPrevCol();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            case Clutter.KEY_Down:
+                if (this._checkSwitchTime()) {
+                    this._gridSelectNextRow();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            case Clutter.KEY_Up:
+                if (this._checkSwitchTime()) {
+                    this._gridSelectPrevRow();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            }
+
+            switch (action) {
+            case Meta.KeyBindingAction.SWITCH_GROUP:
+            case Meta.KeyBindingAction.SWITCH_WINDOWS:
+            case Meta.KeyBindingAction.SWITCH_PANELS:
+                if (this._checkSwitchTime()) {
+                    if (modifiers & Clutter.ModifierType.SHIFT_MASK)
+                        this._gridSelectPrevCol();
+                    else
+                        this._gridSelectNextCol();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            case Meta.KeyBindingAction.SWITCH_GROUP_BACKWARD:
+            case Meta.KeyBindingAction.SWITCH_WINDOWS_BACKWARD:
+            case Meta.KeyBindingAction.SWITCH_PANELS_BACKWARD:
+                if (this._checkSwitchTime()) {
+                    this._gridSelectPrevCol();
+                    this._setCurrentWindow(this._windows[this._currentIndex]);
+                }
+                return true;
+            }
+
+            return true;
+        }
+
+        return AppSwitcher.AppSwitcher.prototype._keyPressEvent.call(this, actor, event);
+    },
+
     _onWorkspaceSelected: function() {
         this._windows = AppSwitcher.getWindowsForBinding(this._binding);
         this._currentIndex = 0;
@@ -222,6 +426,12 @@ ClassicSwitcher.prototype = {
     },
     
     _setCurrentWindow: function(window) {
+        if (this._useWindowGrid && this._windowGrid) {
+            this._windowGrid.highlight(this._currentIndex, false);
+            this._activateSelected();
+            return;
+        }
+
         this._appList.highlight(this._currentIndex, false);
         this._doWindowPreview();
         this._destroyThumbnails();
@@ -245,6 +455,18 @@ ClassicSwitcher.prototype = {
     },
 
     _onDestroy: function() {
+        if (this._windowGrid) {
+            if (this._gridActId > 0) {
+                this._windowGrid.disconnect(this._gridActId);
+                this._gridActId = 0;
+            }
+            if (this._gridEnterId > 0) {
+                this._windowGrid.disconnect(this._gridEnterId);
+                this._gridEnterId = 0;
+            }
+            this._windowGrid.destroy();
+            this._windowGrid = null;
+        }
         if (this._appList !== null) {
             if (this._applist_act_id > 0) {
                 this._appList.disconnect(this._applist_act_id);
@@ -922,6 +1144,200 @@ ThumbnailList.prototype = {
         this._thumbnailBins = new Array();
     }
 };
+
+function WindowGrid(windows, activeMonitor) {
+    this._init(windows, activeMonitor);
+}
+
+WindowGrid.prototype = {
+    _init: function(windows, activeMonitor) {
+        this.actor = new St.Widget({ name: 'window-grid', reactive: true });
+        this.actor.connect('get-preferred-width', Lang.bind(this, this._getPreferredWidth));
+        this.actor.connect('get-preferred-height', Lang.bind(this, this._getPreferredHeight));
+        this.actor.connect('allocate', Lang.bind(this, this._allocate));
+
+        this._windows = windows;
+        this._activeMonitor = activeMonitor;
+        this._items = [];
+        this._clones = [];
+        this._highlighted = -1;
+        this._gridCols = 0;
+        this._gridRows = 0;
+
+        for (let i = 0; i < windows.length; i++) {
+            let itemContainer = new St.Widget({ name: 'window-grid-item', reactive: true });
+
+            let cloneWidget = new St.Widget();
+            itemContainer.add_actor(cloneWidget);
+
+            let tracker = Cinnamon.WindowTracker.get_default();
+            let app = tracker.get_window_app(windows[i]);
+            let icon = app
+                ? app.create_icon_texture_for_window(WINDOW_GRID_ICON_SIZE, windows[i])
+                : new St.Icon({ icon_name: 'application-default-icon',
+                                icon_type: St.IconType.FULLCOLOR,
+                                icon_size: WINDOW_GRID_ICON_SIZE });
+            itemContainer.add_actor(icon);
+
+            itemContainer._cloneWidget = cloneWidget;
+            itemContainer._appIcon = icon;
+            itemContainer._metaWindow = windows[i];
+
+            let idx = i;
+            itemContainer.connect('button-press-event', Lang.bind(this, function() {
+                this._onItemClicked(idx);
+            }));
+            itemContainer.connect('enter-event', Lang.bind(this, function() {
+                this._onItemEnter(idx);
+            }));
+
+            this._items.push(itemContainer);
+            this.actor.add_actor(itemContainer);
+        }
+
+        this._buildClones();
+    },
+
+    _buildClones: function() {
+        for (let i = 0; i < this._items.length; i++) {
+            let item = this._items[i];
+            let metaWindow = item._metaWindow;
+            let cloneWidget = item._cloneWidget;
+            cloneWidget.destroy_all_children();
+
+            let container = new St.Widget();
+            let clones = WindowUtils.createWindowClone(
+                metaWindow, WINDOW_GRID_ITEM_WIDTH, WINDOW_GRID_ITEM_WIDTH, true, true
+            );
+            for (let j = 0; j < clones.length; j++) {
+                let clone = clones[j];
+                container.add_actor(clone.actor);
+                clone.actor.set_position(clone.x, clone.y);
+            }
+            cloneWidget.add_actor(container);
+            this._clones.push(container);
+        }
+    },
+
+    _computeGrid: function(nWindows, availWidth, availHeight) {
+        if (nWindows <= 0)
+            return { cols: 0, rows: 0 };
+
+        let itemW = WINDOW_GRID_ITEM_WIDTH + WINDOW_GRID_ITEM_PADDING * 2;
+        let maxCols = Math.max(1, Math.floor(availWidth / itemW));
+
+        let cols = Math.min(Math.ceil(Math.sqrt(nWindows)), maxCols);
+        let rows = Math.ceil(nWindows / cols);
+        return { cols: cols, rows: rows };
+    },
+
+    _getPreferredWidth: function(actor, forHeight, alloc) {
+        let monitor = this._activeMonitor;
+        alloc.min_size = monitor.width;
+        alloc.natural_size = monitor.width;
+    },
+
+    _getPreferredHeight: function(actor, forWidth, alloc) {
+        let monitor = this._activeMonitor;
+        alloc.min_size = monitor.height;
+        alloc.natural_size = monitor.height;
+    },
+
+    _allocate: function(actor, box, flags) {
+        let monitor = this._activeMonitor;
+        let availWidth = monitor.width - WINDOW_GRID_MARGIN * 2;
+        let availHeight = monitor.height - WINDOW_GRID_MARGIN * 2;
+
+        let nWindows = this._items.length;
+        if (nWindows === 0)
+            return;
+
+        let grid = this._computeGrid(nWindows, availWidth, availHeight);
+        this._gridCols = grid.cols;
+        this._gridRows = grid.rows;
+
+        let slotWidth = availWidth / grid.cols;
+        let slotHeight = availHeight / grid.rows;
+
+        let lastRowItems = nWindows % grid.cols;
+        let lastRowOffset = 0;
+        if (lastRowItems !== 0) {
+            lastRowOffset = (availWidth - lastRowItems * slotWidth) / 2;
+        }
+
+        let childBox = new Clutter.ActorBox();
+
+        for (let i = 0; i < nWindows; i++) {
+            let col = i % grid.cols;
+            let row = Math.floor(i / grid.cols);
+
+            let offsetX = 0;
+            if (lastRowItems !== 0 && row === grid.rows - 1) {
+                offsetX = lastRowOffset;
+            }
+
+            let slotX = WINDOW_GRID_MARGIN + offsetX + col * slotWidth;
+            let slotY = WINDOW_GRID_MARGIN + row * slotHeight;
+
+            let itemPad = WINDOW_GRID_ITEM_PADDING;
+            childBox.x1 = Math.floor(slotX + itemPad + (slotWidth - itemPad * 2 - WINDOW_GRID_ITEM_WIDTH) / 2);
+            childBox.y1 = Math.floor(slotY + itemPad);
+            childBox.x2 = Math.floor(childBox.x1 + WINDOW_GRID_ITEM_WIDTH);
+            childBox.y2 = Math.floor(childBox.y1 + slotHeight - itemPad * 2);
+
+            this._items[i].allocate(childBox, flags);
+
+            let itemHeight = childBox.y2 - childBox.y1;
+            let itemWidth = childBox.x2 - childBox.x1;
+
+            let cloneWidget = this._items[i]._cloneWidget;
+            let cloneBox = new Clutter.ActorBox();
+            cloneBox.x1 = 0;
+            cloneBox.y1 = 0;
+            cloneBox.x2 = itemWidth;
+            cloneBox.y2 = itemHeight - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
+            cloneWidget.allocate(cloneBox, flags);
+
+            let iconBox = new Clutter.ActorBox();
+            iconBox.x1 = itemWidth - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
+            iconBox.y1 = cloneBox.y2 + WINDOW_GRID_ICON_PADDING / 2;
+            iconBox.x2 = iconBox.x1 + WINDOW_GRID_ICON_SIZE;
+            iconBox.y2 = iconBox.y1 + WINDOW_GRID_ICON_SIZE;
+            this._items[i]._appIcon.allocate(iconBox, flags);
+        }
+    },
+
+    highlight: function(index, justOutline) {
+        if (this._highlighted !== -1 && this._highlighted < this._items.length) {
+            this._items[this._highlighted].remove_style_pseudo_class('selected');
+            this._items[this._highlighted].remove_style_pseudo_class('outlined');
+        }
+
+        this._highlighted = index;
+
+        if (index >= 0 && index < this._items.length) {
+            if (justOutline)
+                this._items[index].add_style_pseudo_class('outlined');
+            else
+                this._items[index].add_style_pseudo_class('selected');
+        }
+    },
+
+    _onItemClicked: function(index) {
+        this.emit('item-activated', index);
+    },
+
+    _onItemEnter: function(index) {
+        this.emit('item-entered', index);
+    },
+
+    destroy: function() {
+        this.actor.destroy();
+    }
+};
+
+Signals.addSignalMethods(WindowGrid.prototype);
+
 
 function _drawArrow(area, side) {
     let themeNode = area.get_theme_node();

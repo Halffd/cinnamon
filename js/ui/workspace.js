@@ -24,7 +24,7 @@ const CLOSE_BUTTON_FADE_TIME = 100;
 
 const DEMANDS_ATTENTION_CLASS_NAME = "window-list-item-demands-attention";
 
-const DEFAULT_SLOT_FRACTION = 0.99;
+const DEFAULT_SLOT_FRACTION = 1.0;
 const WINDOWOVERLAY_ICON_SIZE = 16;
 
 var menuShowing = null;
@@ -1260,7 +1260,7 @@ var Workspace = GObject.registerClass({
         this.currentMonitorIndex = Main.layoutManager.primaryIndex;
         Main.layoutManager.monitors.forEach((monitor, ix) => {
             let m = new WorkspaceMonitor(metaWorkspace, ix, this);
-            m.setGeometry(monitor.x, monitor.y, monitor.width, monitor.height, monitor.width * .01);
+            m.setGeometry(monitor.x, monitor.y, monitor.width, monitor.height, 0);
             this._monitors.push(m);
             this.add_child(m);
         });

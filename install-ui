@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PREFIX="${1:-/usr}"
+THEME_DIR="${PREFIX}/share/cinnamon/theme"
+
+echo "==> Installing cinnamon fork UI/js/styles to $PREFIX"
+
+echo " -> Copying js/ to ${PREFIX}/share/cinnamon/js/"
+sudo cp -R "${SCRIPT_DIR}/js" "${PREFIX}/share/cinnamon/"
+
+echo " -> Copying files/usr/ to ${PREFIX}/"
+sudo cp -R "${SCRIPT_DIR}/files/usr" "${PREFIX}/"
+
+if [ -d "${SCRIPT_DIR}/files/etc" ]; then
+    echo " -> Copying files/etc/ to /etc/"
+    sudo cp -R "${SCRIPT_DIR}/files/etc" /
+fi
+
+echo " -> Building cinnamon.css"
+builddir="${SCRIPT_DIR}/tmp"
+mkdir -p "$builddir"
+meson setup "$builddir" --prefix="$PREFIX" 2>/dev/null || true
+meson compile -C "$builddir" cinnamon_css
+
+echo " -> Installing cinnamon.css to ${THEME_DIR}/"
+sudo mkdir -p "${THEME_DIR}"
+sudo cp "${builddir}/data/theme/cinnamon-sass/cinnamon.css" "${THEME_DIR}/"
+
+echo " -> Installing theme assets (SVGs, PNGs) to ${THEME_DIR}/"
+sudo cp "${SCRIPT_DIR}/data/theme/"*.svg "${THEME_DIR}/" 2>/dev/null || true
+sudo cp "${SCRIPT_DIR}/data/theme/"*.png "${THEME_DIR}/" 2>/dev/null || true
+
+echo " -> Installing SCSS sources to ${THEME_DIR}/cinnamon-sass/"
+sudo mkdir -p "${THEME_DIR}/cinnamon-sass"
+sudo cp -R "${SCRIPT_DIR}/data/theme/cinnamon-sass/" "${THEME_DIR}/cinnamon-sass/"
+
+echo " -> Installing gsettings schema"
+sudo cp "${SCRIPT_DIR}/data/org.cinnamon.gschema.xml" "${PREFIX}/share/glib-2.0/schemas/"
+sudo glib-compile-schemas "${PREFIX}/share/glib-2.0/schemas/"
+
+echo "==> Done. Restart cinnamon (Alt+F2 -> r) to apply."

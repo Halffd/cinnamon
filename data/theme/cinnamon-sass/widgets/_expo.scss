@@ -1,8 +1,8 @@
 
 .workspace {
 
-  &-thumbnails { spacing: 26px; }
-  &-thumbnails-background { padding: 8px; }
+  &-thumbnails { spacing: 4px; }
+  &-thumbnails-background { padding: 2px; }
 
   // this controls both the darkness of thumbnails in expo and
   // the darkness of the overiew backgroound
@@ -69,23 +69,23 @@
   }
 
   &-border {
-    border: 3px solid $accent_bg_color;
-    border-radius: $base_border_radius;
+    border: 1px solid $accent_bg_color;
+    border-radius: 0;
   }
 
   &-caption {
-    min-height: 22px;
-    border-radius: $base_border_radius;
-    padding: $base_padding $base_padding * 1.5;
-    spacing: $base_margin;
+    min-height: 0;
+    border-radius: 0;
+    padding: 0 2px;
+    spacing: 0;
     border: 1px solid $borders_color;
     background-color: $light_bg_color;
-    -cinnamon-caption-spacing: $base_padding;
+    -cinnamon-caption-spacing: 0;
 
     &:focus { background-color: $lightest_bg_color; }
   }
 }
 
-#overview { spacing: 12px; }
+#overview { spacing: 0; }
 
 .overview-empty-placeholder { @extend %large_title; }
