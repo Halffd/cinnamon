@@ -83,6 +83,15 @@ const Gio = imports.gi.Gio;
 const GioUnix = imports.gi.GioUnix;
 const GLib = imports.gi.GLib;
 const Gtk = imports.gi.Gtk;
+
+function _debugLog(msg) {
+    try {
+        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
+        let existing = '';
+        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
+        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
+    } catch(e) {}
+}
 const Mainloop = imports.mainloop;
 const Meta = imports.gi.Meta;
 const Cinnamon = imports.gi.Cinnamon;
@@ -296,6 +305,7 @@ function _reparentActor(actor, newParent) {
  * Starts cinnamon. Should not be called in JavaScript code
  */
 function start() {
+    _debugLog('main.start() called');
     global.reparentActor = _reparentActor;
 
     // Monkey patch utility functions into the global proxy;
@@ -438,7 +448,9 @@ function start() {
     osdWindowManager = new OsdWindow.OsdWindowManager();
 
     overview = new Overview.Overview();
+    _debugLog('main: overview created');
     expo = new Expo.Expo();
+    _debugLog('main: expo created');
 
     statusIconDispatcher = new StatusIconDispatcher.StatusIconDispatcher();
 

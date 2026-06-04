@@ -5,10 +5,20 @@ const GObject = imports.gi.GObject;
 const Meta = imports.gi.Meta;
 const St = imports.gi.St;
 const Cinnamon = imports.gi.Cinnamon;
+const GLib = imports.gi.GLib;
 
 const DND = imports.ui.dnd;
 const Main = imports.ui.main;
 const ExpoThumbnail = imports.ui.expoThumbnail;
+
+function _debugLog(msg) {
+    try {
+        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
+        let existing = '';
+        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
+        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
+    } catch(e) {}
+}
 
 // ***************
 // This shows all of the workspaces
@@ -27,6 +37,7 @@ var Expo = GObject.registerClass({
 }, class Expo extends GObject.Object {
     _init() {
         super._init();
+        _debugLog('Expo._init');
         this.visible = false;           // animating to overview, in overview, animating out
         this._shown = false;            // show() and not hide()
         this._modal = false;            // have a modal grab
@@ -257,6 +268,7 @@ var Expo = GObject.registerClass({
     }
 
     show() {
+        _debugLog('Expo.show: _shown=' + this._shown + ' animating=' + this.animationInProgress);
         if (this._shown || this.animationInProgress)
             return;
         this.beforeShow();
@@ -346,6 +358,7 @@ var Expo = GObject.registerClass({
     }
 
     hide(options) {
+        _debugLog('Expo.hide: _shown=' + this._shown);
         if (!this._shown)
             return;
 

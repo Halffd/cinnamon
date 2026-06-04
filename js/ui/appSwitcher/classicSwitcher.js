@@ -7,6 +7,7 @@ const St = imports.gi.St;
 const Meta = imports.gi.Meta;
 const Pango = imports.gi.Pango;
 const Cinnamon = imports.gi.Cinnamon;
+const GLib = imports.gi.GLib;
 const Signals = imports.signals;
 const Mainloop = imports.mainloop;
 
@@ -14,6 +15,23 @@ const AppSwitcher = imports.ui.appSwitcher.appSwitcher;
 const Main = imports.ui.main;
 
 const WindowUtils = imports.misc.windowUtils;
+
+let _debugLog = (function() {
+    let path = null;
+    return function(msg) {
+        try {
+            if (!path) {
+                path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
+            }
+            let existing = '';
+            try {
+                let [ok, contents] = GLib.file_get_contents(path);
+                if (ok) existing = contents;
+            } catch(e) {}
+            GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
+        } catch(e) {}
+    };
+})();
 
 // easing durations (ms)
 const POPUP_SCROLL_TIME = 100;
@@ -28,12 +46,11 @@ const PREVIEW_DELAY_TIMEOUT = 0;
 const THUMBNAIL_DEFAULT_SIZE = 256;
 const iconSizes = [96, 64, 48];
 
-const WINDOW_GRID_ITEM_WIDTH = 600;
-const WINDOW_GRID_ITEM_PADDING = 8;
 const WINDOW_GRID_ICON_SIZE = 24;
 const WINDOW_GRID_ICON_PADDING = 4;
-const WINDOW_GRID_MARGIN = 16;
-const WINDOW_GRID_SLOT_FRACTION = 0.99;
+const WINDOW_GRID_GAP = 16;
+const WINDOW_GRID_COLS_MAX = 4;
+const WINDOW_GRID_SCALE = 0.92;
 
 function mod(a, b) {
     return (a + b) % b;
@@ -49,7 +66,9 @@ ClassicSwitcher.prototype = {
     _init: function() {
         AppSwitcher.AppSwitcher.prototype._init.apply(this, arguments);
 
-        this.actor = new Cinnamon.GenericContainer({ name: 'altTabPopup',
+        _debugLog('ClassicSwitcher._init: windows=' + this._windows.length);
+
+        this.actor = new Cinnamon.GenericContainer({ name: 'altTabPopup', 
                                                   reactive: true,
                                                   visible: false });
         
@@ -62,8 +81,11 @@ ClassicSwitcher.prototype = {
 
         Main.uiGroup.add_actor(this.actor);
 
-        if (!this._setupModal())
+        if (!this._setupModal()) {
+            _debugLog('ClassicSwitcher._init: _setupModal FAILED');
             return;
+        }
+        _debugLog('ClassicSwitcher._init: _setupModal OK');
             
         let styleSettings = global.settings.get_string("alttab-switcher-style");
         let features = styleSettings.split('+');
@@ -76,7 +98,9 @@ ClassicSwitcher.prototype = {
         this._showThumbnails = this._thumbnailsEnabled && !this._iconsEnabled;
         this._showIconAndThumbnails = this._thumbnailsEnabled && this._iconsEnabled;
         this._useWindowGrid = this._showThumbnails;
-        
+
+        _debugLog('ClassicSwitcher._init: style=' + styleSettings + ' icons=' + this._iconsEnabled + ' thumbnails=' + this._thumbnailsEnabled + ' preview=' + this._previewEnabled + ' useWindowGrid=' + this._useWindowGrid);
+
         this._updateList(0);
 
         this.actor.connect('get-preferred-width', Lang.bind(this, this._getPreferredWidth));
@@ -158,6 +182,7 @@ ClassicSwitcher.prototype = {
     },
 
     _show: function() {
+        _debugLog('ClassicSwitcher._show');
         Main.panelManager.panels.forEach(function(panel) { panel.actor.set_reactive(false); });
         
         this.actor.opacity = 255;
@@ -427,8 +452,7 @@ ClassicSwitcher.prototype = {
     
     _setCurrentWindow: function(window) {
         if (this._useWindowGrid && this._windowGrid) {
-            this._windowGrid.highlight(this._currentIndex, false);
-            this._activateSelected();
+            this._windowGrid.highlight(this._currentIndex, false);  
             return;
         }
 
@@ -1151,7 +1175,8 @@ function WindowGrid(windows, activeMonitor) {
 
 WindowGrid.prototype = {
     _init: function(windows, activeMonitor) {
-        this.actor = new St.Widget({ name: 'window-grid', reactive: true });
+        _debugLog('WindowGrid._init: windows=' + windows.length);
+        this.actor = new Cinnamon.GenericContainer({ name: 'window-grid', reactive: true });
         this.actor.connect('get-preferred-width', Lang.bind(this, this._getPreferredWidth));
         this.actor.connect('get-preferred-height', Lang.bind(this, this._getPreferredHeight));
         this.actor.connect('allocate', Lang.bind(this, this._allocate));
@@ -1163,6 +1188,10 @@ WindowGrid.prototype = {
         this._highlighted = -1;
         this._gridCols = 0;
         this._gridRows = 0;
+        this._scrollOffset = 0;
+        this._itemWidth = 0;
+        this._itemHeight = 0;
+        this._rowHeight = 0;
 
         for (let i = 0; i < windows.length; i++) {
             let itemContainer = new St.Widget({ name: 'window-grid-item', reactive: true });
@@ -1195,6 +1224,17 @@ WindowGrid.prototype = {
             this.actor.add_actor(itemContainer);
         }
 
+        this._upArrow = new St.DrawingArea({ style_class: 'switcher-arrow',
+                                              pseudo_class: 'highlighted' });
+        this._upArrow.connect('repaint', Lang.bind(this,
+            function() { _drawArrow(this._upArrow, St.Side.TOP); }));
+        this._downArrow = new St.DrawingArea({ style_class: 'switcher-arrow',
+                                                pseudo_class: 'highlighted' });
+        this._downArrow.connect('repaint', Lang.bind(this,
+            function() { _drawArrow(this._downArrow, St.Side.BOTTOM); }));
+        this.actor.add_actor(this._upArrow);
+        this.actor.add_actor(this._downArrow);
+
         this._buildClones();
     },
 
@@ -1207,7 +1247,7 @@ WindowGrid.prototype = {
 
             let container = new St.Widget();
             let clones = WindowUtils.createWindowClone(
-                metaWindow, WINDOW_GRID_ITEM_WIDTH, WINDOW_GRID_ITEM_WIDTH, true, true
+                metaWindow, 600, 338, true, true
             );
             for (let j = 0; j < clones.length; j++) {
                 let clone = clones[j];
@@ -1222,88 +1262,155 @@ WindowGrid.prototype = {
     _computeGrid: function(nWindows, availWidth, availHeight) {
         if (nWindows <= 0)
             return { cols: 0, rows: 0 };
-
-        let itemW = WINDOW_GRID_ITEM_WIDTH + WINDOW_GRID_ITEM_PADDING * 2;
-        let maxCols = Math.max(1, Math.floor(availWidth / itemW));
-
-        let cols = Math.min(Math.ceil(Math.sqrt(nWindows)), maxCols);
+        let cols = Math.min(WINDOW_GRID_COLS_MAX, nWindows);
         let rows = Math.ceil(nWindows / cols);
         return { cols: cols, rows: rows };
     },
 
     _getPreferredWidth: function(actor, forHeight, alloc) {
         let monitor = this._activeMonitor;
-        alloc.min_size = monitor.width;
-        alloc.natural_size = monitor.width;
+        alloc.min_size = Math.round(monitor.width * WINDOW_GRID_SCALE);
+        alloc.natural_size = Math.round(monitor.width * WINDOW_GRID_SCALE);
     },
 
     _getPreferredHeight: function(actor, forWidth, alloc) {
         let monitor = this._activeMonitor;
-        alloc.min_size = monitor.height;
-        alloc.natural_size = monitor.height;
+        alloc.min_size = Math.round(monitor.height * WINDOW_GRID_SCALE);
+        alloc.natural_size = Math.round(monitor.height * WINDOW_GRID_SCALE);
     },
 
     _allocate: function(actor, box, flags) {
         let monitor = this._activeMonitor;
-        let availWidth = monitor.width - WINDOW_GRID_MARGIN * 2;
-        let availHeight = monitor.height - WINDOW_GRID_MARGIN * 2;
+        let availWidth = Math.round(monitor.width * WINDOW_GRID_SCALE);
+        let availHeight = Math.round(monitor.height * WINDOW_GRID_SCALE);
+        let gridOffsetX = Math.floor((monitor.width - availWidth) / 2);
+        let gridOffsetY = Math.floor((monitor.height - availHeight) / 2);
 
         let nWindows = this._items.length;
         if (nWindows === 0)
             return;
 
-        let grid = this._computeGrid(nWindows, availWidth, availHeight);
-        this._gridCols = grid.cols;
-        this._gridRows = grid.rows;
+        let cols = Math.min(WINDOW_GRID_COLS_MAX, nWindows);
+        let rows = Math.ceil(nWindows / cols);
+        this._gridCols = cols;
+        this._gridRows = rows;
 
-        let slotWidth = availWidth / grid.cols;
-        let slotHeight = availHeight / grid.rows;
+        let itemWidth = Math.floor((availWidth - (cols - 1) * WINDOW_GRID_GAP) / cols);
+        let itemHeight = Math.round(itemWidth * 9 / 16);
+        let rowHeight = itemHeight + WINDOW_GRID_GAP;
+        this._itemWidth = itemWidth;
+        this._itemHeight = itemHeight;
+        this._rowHeight = rowHeight;
 
-        let lastRowItems = nWindows % grid.cols;
+        let totalContentHeight = rows * rowHeight - WINDOW_GRID_GAP;
+        let maxScroll = Math.max(0, totalContentHeight - availHeight);
+        this._scrollOffset = Math.max(0, Math.min(this._scrollOffset, maxScroll));
+        this._canScrollUp = this._scrollOffset > 0;
+        this._canScrollDown = this._scrollOffset < maxScroll;
+
+        let lastRowItems = nWindows % cols;
         let lastRowOffset = 0;
         if (lastRowItems !== 0) {
-            lastRowOffset = (availWidth - lastRowItems * slotWidth) / 2;
+            lastRowOffset = (availWidth - lastRowItems * (itemWidth + WINDOW_GRID_GAP) + WINDOW_GRID_GAP) / 2;
         }
 
         let childBox = new Clutter.ActorBox();
 
         for (let i = 0; i < nWindows; i++) {
-            let col = i % grid.cols;
-            let row = Math.floor(i / grid.cols);
+            let col = i % cols;
+            let row = Math.floor(i / cols);
 
-            let offsetX = 0;
-            if (lastRowItems !== 0 && row === grid.rows - 1) {
-                offsetX = lastRowOffset;
+            let x = gridOffsetX + col * (itemWidth + WINDOW_GRID_GAP);
+            let y = gridOffsetY + row * rowHeight - this._scrollOffset;
+
+            if (lastRowItems !== 0 && row === rows - 1) {
+                x = gridOffsetX + lastRowOffset + col * (itemWidth + WINDOW_GRID_GAP);
             }
 
-            let slotX = WINDOW_GRID_MARGIN + offsetX + col * slotWidth;
-            let slotY = WINDOW_GRID_MARGIN + row * slotHeight;
-
-            let itemPad = WINDOW_GRID_ITEM_PADDING;
-            childBox.x1 = Math.floor(slotX + itemPad + (slotWidth - itemPad * 2 - WINDOW_GRID_ITEM_WIDTH) / 2);
-            childBox.y1 = Math.floor(slotY + itemPad);
-            childBox.x2 = Math.floor(childBox.x1 + WINDOW_GRID_ITEM_WIDTH);
-            childBox.y2 = Math.floor(childBox.y1 + slotHeight - itemPad * 2);
+            childBox.x1 = Math.floor(x);
+            childBox.y1 = Math.floor(y);
+            childBox.x2 = Math.floor(x + itemWidth);
+            childBox.y2 = Math.floor(y + itemHeight);
 
             this._items[i].allocate(childBox, flags);
 
-            let itemHeight = childBox.y2 - childBox.y1;
-            let itemWidth = childBox.x2 - childBox.x1;
+            let itemH = childBox.y2 - childBox.y1;
+            let itemW = childBox.x2 - childBox.x1;
 
             let cloneWidget = this._items[i]._cloneWidget;
             let cloneBox = new Clutter.ActorBox();
             cloneBox.x1 = 0;
             cloneBox.y1 = 0;
-            cloneBox.x2 = itemWidth;
-            cloneBox.y2 = itemHeight - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
+            cloneBox.x2 = itemW;
+            cloneBox.y2 = itemH - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
             cloneWidget.allocate(cloneBox, flags);
 
             let iconBox = new Clutter.ActorBox();
-            iconBox.x1 = itemWidth - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
+            iconBox.x1 = itemW - WINDOW_GRID_ICON_SIZE - WINDOW_GRID_ICON_PADDING;
             iconBox.y1 = cloneBox.y2 + WINDOW_GRID_ICON_PADDING / 2;
             iconBox.x2 = iconBox.x1 + WINDOW_GRID_ICON_SIZE;
             iconBox.y2 = iconBox.y1 + WINDOW_GRID_ICON_SIZE;
             this._items[i]._appIcon.allocate(iconBox, flags);
+        }
+
+        this.actor.set_clip(gridOffsetX, gridOffsetY, availWidth, availHeight);
+
+        let arrowSize = 24;
+        let arrowBox = new Clutter.ActorBox();
+        arrowBox.x1 = Math.floor(gridOffsetX + availWidth / 2 - arrowSize / 2);
+        arrowBox.x2 = Math.floor(arrowBox.x1 + arrowSize);
+        arrowBox.y1 = gridOffsetY;
+        arrowBox.y2 = arrowBox.y1 + arrowSize;
+        this._upArrow.allocate(arrowBox, flags);
+        this._upArrow.opacity = this._canScrollUp ? 255 : 0;
+
+        arrowBox.x1 = Math.floor(gridOffsetX + availWidth / 2 - arrowSize / 2);
+        arrowBox.x2 = Math.floor(arrowBox.x1 + arrowSize);
+        arrowBox.y1 = gridOffsetY + availHeight - arrowSize;
+        arrowBox.y2 = arrowBox.y1 + arrowSize;
+        this._downArrow.allocate(arrowBox, flags);
+        this._downArrow.opacity = this._canScrollDown ? 255 : 0;
+    },
+
+    _ensureItemVisible: function(index) {
+        if (index < 0 || index >= this._items.length || this._rowHeight <= 0)
+            return;
+        let row = Math.floor(index / this._gridCols);
+        let monitor = this._activeMonitor;
+        let availHeight = Math.round(monitor.height * WINDOW_GRID_SCALE);
+        let rowTop = row * this._rowHeight;
+        let rowBottom = rowTop + this._itemHeight;
+        let changed = false;
+        if (rowTop < this._scrollOffset) {
+            this._scrollOffset = rowTop;
+            changed = true;
+        } else if (rowBottom > this._scrollOffset + availHeight) {
+            this._scrollOffset = rowBottom - availHeight;
+            changed = true;
+        }
+        if (changed)
+            this.actor.queue_relayout();
+    },
+
+    scrollUp: function() {
+        let monitor = this._activeMonitor;
+        let availHeight = Math.round(monitor.height * WINDOW_GRID_SCALE);
+        let totalContentHeight = this._gridRows * this._rowHeight - WINDOW_GRID_GAP;
+        let maxScroll = Math.max(0, totalContentHeight - availHeight);
+        if (this._scrollOffset > 0) {
+            this._scrollOffset = Math.max(0, this._scrollOffset - this._rowHeight);
+            this.actor.queue_relayout();
+        }
+    },
+
+    scrollDown: function() {
+        let monitor = this._activeMonitor;
+        let availHeight = Math.round(monitor.height * WINDOW_GRID_SCALE);
+        let totalContentHeight = this._gridRows * this._rowHeight - WINDOW_GRID_GAP;
+        let maxScroll = Math.max(0, totalContentHeight - availHeight);
+        if (this._scrollOffset < maxScroll) {
+            this._scrollOffset = Math.min(maxScroll, this._scrollOffset + this._rowHeight);
+            this.actor.queue_relayout();
         }
     },
 
@@ -1311,6 +1418,7 @@ WindowGrid.prototype = {
         if (this._highlighted !== -1 && this._highlighted < this._items.length) {
             this._items[this._highlighted].remove_style_pseudo_class('selected');
             this._items[this._highlighted].remove_style_pseudo_class('outlined');
+            this._items[this._highlighted].set_style('');
         }
 
         this._highlighted = index;
@@ -1318,9 +1426,13 @@ WindowGrid.prototype = {
         if (index >= 0 && index < this._items.length) {
             if (justOutline)
                 this._items[index].add_style_pseudo_class('outlined');
-            else
+            else {
                 this._items[index].add_style_pseudo_class('selected');
+                this._items[index].set_style('border: 8px solid rgba(0, 0, 139, 0.9);');
+            }
         }
+
+        this._ensureItemVisible(index);
     },
 
     _onItemClicked: function(index) {

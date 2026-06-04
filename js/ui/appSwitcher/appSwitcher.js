@@ -8,8 +8,18 @@ const Meta = imports.gi.Meta;
 const Mainloop = imports.mainloop;
 const Main = imports.ui.main;
 const Cinnamon = imports.gi.Cinnamon;
+const GLib = imports.gi.GLib;
 
 const DISABLE_HOVER_TIMEOUT = 500; // milliseconds
+
+function _debugLog(msg) {
+    try {
+        let path = GLib.build_filenamev([GLib.get_home_dir(), '.cache', 'cinnamon-debug.log']);
+        let existing = '';
+        try { let [ok, c] = GLib.file_get_contents(path); if (ok) existing = c; } catch(e) {}
+        GLib.file_set_contents(path, existing + new Date().toISOString() + ' ' + msg + '\n');
+    } catch(e) {}
+}
 
 function sortWindowsByUserTime(win1, win2) {
     let t1 = win1.get_user_time();
@@ -111,6 +121,7 @@ AppSwitcher.prototype = {
         this._initialDelayTimeoutId = null;
         this._binding = binding;
         this._windows = getWindowsForBinding(binding);
+        _debugLog('AppSwitcher._init: binding=' + binding.get_name() + ' windows=' + this._windows.length);
 
         this._haveModal = false;
         this._destroyed = false;
@@ -134,11 +145,14 @@ AppSwitcher.prototype = {
     _setupModal: function () {
         this._haveModal = Main.pushModal(this.actor, undefined, undefined, Cinnamon.ActionMode.SYSTEM_MODAL);
         if (!this._haveModal) {
+            _debugLog('AppSwitcher._setupModal: first pushModal failed, trying POINTER_ALREADY_GRABBED');
             // Probably someone else has a pointer grab, try again with keyboard only
             this._haveModal = Main.pushModal(this.actor, global.get_current_time(), Meta.ModalOptions.POINTER_ALREADY_GRABBED, Cinnamon.ActionMode.SYSTEM_MODAL);
         }
-        if (!this._haveModal)
+        if (!this._haveModal) {
+            _debugLog('AppSwitcher._setupModal: FAILED to get modal');
             this._failedGrabAction();
+        }
         else {
             // Initially disable hover so we ignore the enter-event if
             // the switcher appears underneath the current pointer location
@@ -163,6 +177,7 @@ AppSwitcher.prototype = {
             // We delay showing the popup so that fast Alt+Tab users aren't
             // disturbed by the popup briefly flashing.
             let delay = global.settings.get_int("alttab-switcher-delay");
+            _debugLog('AppSwitcher._setupModal: modal OK, delay=' + delay + 'ms');
             this._initialDelayTimeoutId = Mainloop.timeout_add(delay, Lang.bind(this, this._show));
         }
         return this._haveModal;
@@ -266,8 +281,9 @@ AppSwitcher.prototype = {
         let modifiers = Cinnamon.get_event_state(event);
         let symbol = event.get_key_symbol();
         let keycode = event.get_key_code();
-        // This relies on the fact that Clutter.ModifierType is the same as Gdk.ModifierType
         let action = global.display.get_keybinding_action(keycode, modifiers);
+
+        _debugLog('AppSwitcher._keyPressEvent: symbol=0x' + symbol.toString(16) + ' action=' + action);
 
         this._disableHover();
 
@@ -340,6 +356,8 @@ AppSwitcher.prototype = {
         let [x, y, mods] = global.get_pointer();
         let state = mods & this._modifierMask;
 
+        _debugLog('AppSwitcher._keyReleaseEvent: state=' + state + ' modifierMask=' + this._modifierMask);
+
         if (state == 0) {
             if (this._initialDelayTimeoutId !== 0)
                 this._currentIndex = (this._currentIndex + 1) % this._windows.length;
@@ -350,6 +368,7 @@ AppSwitcher.prototype = {
     },
 
     _failedGrabAction: function () {
+        _debugLog('AppSwitcher._failedGrabAction: style=' + global.settings.get_string('alttab-switcher-style'));
         if (!["coverflow", "timeline"].includes(global.settings.get_string('alttab-switcher-style'))) {
             this._keyReleaseEvent(null, null);
         }

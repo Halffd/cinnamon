@@ -10,13 +10,13 @@ echo "==> Installing cinnamon fork UI/js/styles to $PREFIX"
 echo " -> Copying js/ to ${PREFIX}/share/cinnamon/js/"
 sudo cp -R "${SCRIPT_DIR}/js" "${PREFIX}/share/cinnamon/"
 
-echo " -> Copying files/usr/ to ${PREFIX}/"
-sudo cp -R "${SCRIPT_DIR}/files/usr" "${PREFIX}/"
+#echo " -> Copying files/usr/ to ${PREFIX}/"
+#sudo cp -R "${SCRIPT_DIR}/files/usr" "${PREFIX}/"
 
-if [ -d "${SCRIPT_DIR}/files/etc" ]; then
-    echo " -> Copying files/etc/ to /etc/"
-    sudo cp -R "${SCRIPT_DIR}/files/etc" /
-fi
+#if [ -d "${SCRIPT_DIR}/files/etc" ]; then
+#    echo " -> Copying files/etc/ to /etc/"
+#    sudo cp -R "${SCRIPT_DIR}/files/etc" /
+#fi
 
 echo " -> Building cinnamon.css"
 builddir="${SCRIPT_DIR}/tmp"
