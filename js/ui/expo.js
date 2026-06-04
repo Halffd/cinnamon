@@ -597,4 +597,7 @@ var Expo = GObject.registerClass({
 
         Main.layoutManager._chrome.updateRegions();
     }
+
+    init() {
+    }
 });

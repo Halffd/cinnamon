@@ -413,4 +413,7 @@ var Overview = GObject.registerClass({
         this._syncInputMode();
         Main.layoutManager._chrome.updateRegions();
     }
+
+    init() {
+    }
 });
