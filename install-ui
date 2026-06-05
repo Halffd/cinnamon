@@ -7,8 +7,24 @@ THEME_DIR="${PREFIX}/share/cinnamon/theme"
 
 echo "==> Installing cinnamon fork UI/js/styles to $PREFIX"
 
-echo " -> Copying js/ to ${PREFIX}/share/cinnamon/js/"
-sudo cp -R "${SCRIPT_DIR}/js" "${PREFIX}/share/cinnamon/"
+echo " -> Copying changed JS files (fork-only changes) to ${PREFIX}/share/cinnamon/js/"
+JS_TARGET="${PREFIX}/share/cinnamon/js"
+for f in \
+    js/ui/appSwitcher/appSwitcher.js \
+    js/ui/appSwitcher/classicSwitcher.js \
+    js/ui/expo.js \
+    js/ui/layout.js \
+    js/ui/main.js \
+    js/ui/overview.js \
+    js/ui/windowManager.js \
+    js/ui/workspace.js \
+    js/ui/workspacesView.js
+do
+    dir="${JS_TARGET}/$(dirname "$f")"
+    sudo mkdir -p "$dir"
+    sudo cp "${SCRIPT_DIR}/${f}" "${dir}/"
+    echo "   copied $f"
+done
 
 #echo " -> Copying files/usr/ to ${PREFIX}/"
 #sudo cp -R "${SCRIPT_DIR}/files/usr" "${PREFIX}/"
