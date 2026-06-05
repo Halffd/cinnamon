@@ -61,6 +61,17 @@ const MuffinZoomIface =
     <arg type="d" direction="in" /> \
     <arg type="d" direction="in" /> \
   </method> \
+  <method name="SetColorEffectsForMonitor"> \
+    <arg type="i" direction="in" /> \
+    <arg type="b" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+  </method> \
 </interface> \
     </node>';
 
@@ -214,6 +225,19 @@ var ZoomBridge = class ZoomBridge {
     this._proxy.SetViewportForMonitorRemote(monitorIndex, viewportX, viewportY, (result, error) => {
       if (error) log('ZoomBridge.SetViewportForMonitor: ' + error.message);
     });
+  }
+
+  setColorEffectsForMonitor(monitorIndex, invertLightness, saturation,
+                            brightnessRed, brightnessGreen, brightnessBlue,
+                            contrastRed, contrastGreen, contrastBlue) {
+    if (!this._available) return;
+    this._proxy.SetColorEffectsForMonitorRemote(
+      monitorIndex, invertLightness, saturation,
+      brightnessRed, brightnessGreen, brightnessBlue,
+      contrastRed, contrastGreen, contrastBlue,
+      (result, error) => {
+        if (error) log('ZoomBridge.SetColorEffectsForMonitor: ' + error.message);
+      });
   }
 
     destroy() {

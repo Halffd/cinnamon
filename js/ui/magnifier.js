@@ -64,7 +64,15 @@ const CROSS_HAIRS_THICKNESS_KEY = 'cross-hairs-thickness';
 const CROSS_HAIRS_COLOR_KEY     = 'cross-hairs-color';
 const CROSS_HAIRS_OPACITY_KEY   = 'cross-hairs-opacity';
 const CROSS_HAIRS_LENGTH_KEY    = 'cross-hairs-length';
-const CROSS_HAIRS_CLIP_KEY      = 'cross-hairs-clip';
+const CROSS_HAIRS_CLIP_KEY = 'cross-hairs-clip';
+const INVERT_LIGHTNESS_KEY = 'invert-lightness';
+const COLOR_SATURATION_KEY = 'color-saturation';
+const BRIGHTNESS_RED_KEY = 'brightness-red';
+const BRIGHTNESS_GREEN_KEY = 'brightness-green';
+const BRIGHTNESS_BLUE_KEY = 'brightness-blue';
+const CONTRAST_RED_KEY = 'contrast-red';
+const CONTRAST_GREEN_KEY = 'contrast-green';
+const CONTRAST_BLUE_KEY = 'contrast-blue';
 
 const KEYBINDING_SCHEMA         = "org.cinnamon.desktop.keybindings"
 const ZOOM_IN_KEY               = "magnifier-zoom-in"
@@ -276,8 +284,9 @@ var Magnifier = class Magnifier {
         if (factor <= 1.0)
             factor = 2.0;
         this._zoomBridge.setZoomLevel(factor);
-        this._compositorZoomActive = true;
-        this._propagateMouseTrackingToCompositor();
+      this._compositorZoomActive = true;
+      this._propagateMouseTrackingToCompositor();
+      this._propagateColorEffectsToCompositor();
         if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
             this._showCompositorCrosshairs();
         this._startFocusCaretTracking();
@@ -799,9 +808,34 @@ var Magnifier = class Magnifier {
             this.setCrosshairsLength(this._settings.get_int(CROSS_HAIRS_LENGTH_KEY));
         });
 
-        this._settings.connect('changed::' + CROSS_HAIRS_CLIP_KEY, () => {
-            this.setCrosshairsClip(this._settings.get_boolean(CROSS_HAIRS_CLIP_KEY));
-        });
+    this._settings.connect('changed::' + CROSS_HAIRS_CLIP_KEY, () => {
+      this.setCrosshairsClip(this._settings.get_boolean(CROSS_HAIRS_CLIP_KEY));
+    });
+
+    this._settings.connect('changed::' + INVERT_LIGHTNESS_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + COLOR_SATURATION_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + BRIGHTNESS_RED_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + BRIGHTNESS_GREEN_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + BRIGHTNESS_BLUE_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + CONTRAST_RED_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + CONTRAST_GREEN_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
+    this._settings.connect('changed::' + CONTRAST_BLUE_KEY, () => {
+      this._propagateColorEffectsToCompositor();
+    });
 
         return ret > 1.0;
     }
@@ -930,9 +964,29 @@ var Magnifier = class Magnifier {
         let monitorManager = Meta.MonitorManager.get();
         let monitors = Main.layoutManager.monitors;
         for (let i = 0; i < monitors.length; i++) {
-            this._zoomBridge.setMouseTrackingForMonitor(i, compositorMode);
-        }
+      this._zoomBridge.setMouseTrackingForMonitor(i, compositorMode);
     }
+  }
+
+  _propagateColorEffectsToCompositor() {
+    if (!this._zoomBridge.available)
+      return;
+    let invertLightness = this._settings.get_boolean(INVERT_LIGHTNESS_KEY);
+    let saturation = this._settings.get_double(COLOR_SATURATION_KEY);
+    let brightnessRed = this._settings.get_double(BRIGHTNESS_RED_KEY);
+    let brightnessGreen = this._settings.get_double(BRIGHTNESS_GREEN_KEY);
+    let brightnessBlue = this._settings.get_double(BRIGHTNESS_BLUE_KEY);
+    let contrastRed = this._settings.get_double(CONTRAST_RED_KEY);
+    let contrastGreen = this._settings.get_double(CONTRAST_GREEN_KEY);
+    let contrastBlue = this._settings.get_double(CONTRAST_BLUE_KEY);
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      this._zoomBridge.setColorEffectsForMonitor(
+        i, invertLightness, saturation,
+        brightnessRed, brightnessGreen, brightnessBlue,
+        contrastRed, contrastGreen, contrastBlue);
+    }
+  }
 };
 Signals.addSignalMethods(Magnifier.prototype);
 
