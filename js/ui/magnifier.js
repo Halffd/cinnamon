@@ -11,6 +11,7 @@ const Signals = imports.signals;
 
 const Main = imports.ui.main;
 const MagnifierDBus = imports.ui.magnifierDBus;
+const ZoomBridge = imports.ui.zoomBridge;
 const Params = imports.misc.params;
 
 // Keep enums in sync with GSettings schemas
@@ -165,6 +166,9 @@ var Magnifier = class Magnifier {
         this._initialized = false;
         this.updateMagId = 0;
         this.enabled = this._appSettings.get_boolean(SHOW_KEY);
+        this._compositorZoomActive = false;
+
+        this._zoomBridge = ZoomBridge.getZoomBridge();
 
         this._appSettings.connect('changed::' + SHOW_KEY,
             () => {
@@ -237,6 +241,16 @@ var Magnifier = class Magnifier {
         this._cursorTracker.set_pointer_visible(false);
     }
 
+    _useCompositorZoom() {
+        if (!this._zoomBridge.available)
+            return false;
+        if (this._zoomRegions.length === 0)
+            return true;
+        let zr = this._zoomRegions[0];
+        return !zr._lensMode &&
+               zr._screenPosition === ScreenPosition.FULL_SCREEN;
+    }
+
     /**
      * setActive:
      * Show/hide all the zoom regions.
@@ -245,6 +259,27 @@ var Magnifier = class Magnifier {
     setActive(activate) {
         if (!activate && !this._initialized)
             return;
+
+    if (activate && this._useCompositorZoom()) {
+        let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+        if (factor <= 1.0)
+            factor = 2.0;
+        this._zoomBridge.setZoomLevel(factor);
+        this._compositorZoomActive = true;
+        this._propagateMouseTrackingToCompositor();
+        if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
+            this._showCompositorCrosshairs();
+        this.emit('active-changed', activate);
+        return;
+    }
+
+        if (!activate && this._compositorZoomActive) {
+            this._zoomBridge.resetZoom();
+            this._compositorZoomActive = false;
+            this._hideCompositorCrosshairs();
+            this.emit('active-changed', activate);
+            return;
+        }
 
         this._initialize();
 
@@ -281,6 +316,19 @@ var Magnifier = class Magnifier {
      *                  of the magnified view.
      */
     setMagFactor(xMagFactor, yMagFactor) {
+        if (this._useCompositorZoom()) {
+            this._zoomBridge.setZoomLevel(xMagFactor);
+            this._compositorZoomActive = xMagFactor > 1.0;
+
+            if (this.updateMagId > 0) {
+                GLib.source_remove (this.updateMagId);
+                this.updateMagId = 0;
+            }
+            this.updateMagId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000,
+                this._writeBackMagFactor.bind(this, xMagFactor));
+            return;
+        }
+
         this._initialize();
 
         let zr = this.getZoomRegions()[0];
@@ -299,6 +347,8 @@ var Magnifier = class Magnifier {
      * @return  Whether the magnifier is active (boolean).
      */
     isActive() {
+        if (this._compositorZoomActive)
+            return true;
         // Sufficient to check one ZoomRegion since Magnifier's active
         // state applies to all of them.
         if (this._zoomRegions.length == 0)
@@ -477,9 +527,62 @@ var Magnifier = class Magnifier {
             if (!this._crossHairs)
                 this.addCrosshairs();
             this._crossHairs.show();
+            if (this._compositorZoomActive)
+                this._showCompositorCrosshairs();
         } else {
             if (this._crossHairs)
                 this._crossHairs.hide();
+            this._hideCompositorCrosshairs();
+        }
+    }
+
+    _showCompositorCrosshairs() {
+        if (!this._crossHairs)
+            return;
+        if (!this._compositorCrosshairsClone) {
+            this._compositorCrosshairsClone = new Clutter.Clone({
+                source: this._crossHairs
+            });
+            global.stage.add_child(this._compositorCrosshairsClone);
+            Cinnamon.util_set_hidden_from_pick(this._compositorCrosshairsClone, true);
+        }
+        this._compositorCrosshairsClone.show();
+        this._updateCompositorCrosshairsPosition();
+        if (!this._compositorCrosshairsTrackId) {
+            this._compositorCrosshairsTrackId = GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT, MOUSE_POLL_FREQUENCY,
+                this._updateCompositorCrosshairsPosition.bind(this));
+        }
+    }
+
+    _hideCompositorCrosshairs() {
+        if (this._compositorCrosshairsTrackId) {
+            GLib.source_remove(this._compositorCrosshairsTrackId);
+            this._compositorCrosshairsTrackId = 0;
+        }
+        if (this._compositorCrosshairsClone) {
+            this._compositorCrosshairsClone.hide();
+        }
+    }
+
+    _updateCompositorCrosshairsPosition() {
+        if (!this._compositorCrosshairsClone || !this._compositorCrosshairsClone.visible)
+            return true;
+        let [xMouse, yMouse, ] = global.get_pointer();
+        let [w, h] = this._compositorCrosshairsClone.get_size();
+        this._compositorCrosshairsClone.set_position(
+            xMouse - w / 2, yMouse - h / 2);
+        return true;
+    }
+
+    _destroyCompositorCrosshairs() {
+        if (this._compositorCrosshairsTrackId) {
+            GLib.source_remove(this._compositorCrosshairsTrackId);
+            this._compositorCrosshairsTrackId = 0;
+        }
+        if (this._compositorCrosshairsClone) {
+            this._compositorCrosshairsClone.destroy();
+            this._compositorCrosshairsClone = null;
         }
     }
 
@@ -691,13 +794,33 @@ var Magnifier = class Magnifier {
     }
 
     _updateScreenPosition() {
-        // Applies only to the first zoom region.
-        if (this._zoomRegions.length) {
-            let position = this._settings.get_enum(SCREEN_POSITION_KEY);
+        let position = this._settings.get_enum(SCREEN_POSITION_KEY);
+        let wasCompositor = this._compositorZoomActive;
+        let nowCompositor = this._useCompositorZoom();
+
+        if (wasCompositor && !nowCompositor) {
+            this._zoomBridge.resetZoom();
+            this._compositorZoomActive = false;
+            this._hideCompositorCrosshairs();
+            this._initialize();
             this._zoomRegions[0].setScreenPosition(position);
-            if (position != ScreenPosition.FULL_SCREEN)
-                this._updateLensMode();
+            if (this.enabled) {
+                let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+                this._zoomRegions[0].setMagFactor(factor, factor);
+                this._zoomRegions[0].setActive(true);
+                this.startTrackingMouse();
+            }
+        } else if (!wasCompositor && nowCompositor && this.enabled) {
+            if (this._zoomRegions.length)
+                this._zoomRegions[0].setActive(false);
+            this.stopTrackingMouse();
+            this.setActive(true);
+        } else if (this._zoomRegions.length) {
+            this._zoomRegions[0].setScreenPosition(position);
         }
+
+        if (position != ScreenPosition.FULL_SCREEN)
+            this._updateLensMode();
     }
 
     _updateLensShape() {
@@ -710,18 +833,41 @@ var Magnifier = class Magnifier {
     }
 
     _updateMagFactor() {
-        // Applies only to the first zoom region.
-        if (this._zoomRegions.length) {
-            // Mag factor is accurate to two decimal places.
-            let magFactor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+        let magFactor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+        if (this._compositorZoomActive) {
+            this._zoomBridge.setZoomLevel(magFactor);
+            this._compositorZoomActive = magFactor > 1.0;
+            if (!this._compositorZoomActive)
+                this._zoomBridge.resetZoom();
+        } else if (this._zoomRegions.length) {
             this._zoomRegions[0].setMagFactor(magFactor, magFactor);
-            this.setActive(this.enabled && magFactor > 1.0);
         }
+        this.setActive(this.enabled && magFactor > 1.0);
+    }
     }
 
     _updateLensMode() {
-        // Applies only to the first zoom region.
-        if (this._zoomRegions.length) {
+        let wasCompositor = this._compositorZoomActive;
+        let nowCompositor = this._useCompositorZoom();
+
+        if (wasCompositor && !nowCompositor) {
+            this._zoomBridge.resetZoom();
+            this._compositorZoomActive = false;
+            this._hideCompositorCrosshairs();
+            this._initialize();
+            this._zoomRegions[0].setLensMode(this._settings.get_boolean(LENS_MODE_KEY));
+            if (this.enabled) {
+                let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+                this._zoomRegions[0].setMagFactor(factor, factor);
+                this._zoomRegions[0].setActive(true);
+                this.startTrackingMouse();
+            }
+        } else if (!wasCompositor && nowCompositor && this.enabled) {
+            if (this._zoomRegions.length)
+                this._zoomRegions[0].setActive(false);
+            this.stopTrackingMouse();
+            this.setActive(true);
+        } else if (this._zoomRegions.length) {
             this._zoomRegions[0].setLensMode(this._settings.get_boolean(LENS_MODE_KEY));
         }
     }
@@ -741,6 +887,35 @@ var Magnifier = class Magnifier {
             this._zoomRegions[0].setMouseTrackingMode(
                 this._settings.get_enum(MOUSE_TRACKING_KEY)
             );
+        }
+        this._propagateMouseTrackingToCompositor();
+    }
+
+    _propagateMouseTrackingToCompositor() {
+        if (!this._zoomBridge.available)
+            return;
+        let jsMode = this._settings.get_enum(MOUSE_TRACKING_KEY);
+        // JS MouseTrackingMode: NONE=0, CENTERED=1, PROPORTIONAL=2, PUSH=3
+        // Muffin MetaZoomMouseTrackingMode: CENTERED=0, PROPORTIONAL=1, PUSH=2
+        let compositorMode;
+        switch (jsMode) {
+            case MouseTrackingMode.CENTERED:
+                compositorMode = 0;
+                break;
+            case MouseTrackingMode.PROPORTIONAL:
+                compositorMode = 1;
+                break;
+            case MouseTrackingMode.PUSH:
+                compositorMode = 2;
+                break;
+            default:
+                compositorMode = 0;
+                break;
+        }
+        let monitorManager = Meta.MonitorManager.get();
+        let monitors = Main.layoutManager.monitors;
+        for (let i = 0; i < monitors.length; i++) {
+            this._zoomBridge.setMouseTrackingForMonitor(i, compositorMode);
         }
     }
 };
@@ -1724,8 +1899,14 @@ var MagnifierInputHandler = class MagnifierInputHandler {
         this.currentZoom = 1.0;
 
         if (this.zoomActive) {
-            let zr = this.magnifier.getZoomRegions()[0];
-            this.currentZoom = zr.getMagFactor()[0];
+            if (this.magnifier._compositorZoomActive) {
+                // Compositor zoom doesn't expose sync zoom level yet;
+                // read from settings as approximation
+                this.currentZoom = parseFloat(
+                    this.magnifier._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+            } else if (this.magnifier.getZoomRegions().length > 0) {
+                this.currentZoom = this.magnifier.getZoomRegions()[0].getMagFactor()[0];
+            }
         }
 
         let shouldEnable = this._a11ySettings.get_boolean(SHOW_KEY);

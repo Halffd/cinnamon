@@ -119,11 +119,11 @@ class Module:
             widget = GSettingsComboBox(_("Lens shape"), "org.cinnamon.desktop.a11y.magnifier", "lens-shape", lens_shape_options)
             self.zoom_stack.add_named(widget, "shape")
 
-            screen_pos_options = [["full-screen",     _("Full screen")],
-                                  ["top-half",        _("Top half")],
-                                  ["bottom-half",     _("Bottom half")],
-                                  ["left-half",       _("Left half")],
-                                  ["right-half",      _("Right half")]]
+        screen_pos_options = [["full-screen", _("Full screen (compositor)")],
+                               ["top-half", _("Top half")],
+                               ["bottom-half", _("Bottom half")],
+                               ["left-half", _("Left half")],
+                               ["right-half", _("Right half")]]
 
             widget = GSettingsComboBox(_("Screen position"), "org.cinnamon.desktop.a11y.magnifier", "screen-position", screen_pos_options)
             self.zoom_stack.add_named(widget, "screen")
