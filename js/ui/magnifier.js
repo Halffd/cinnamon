@@ -9,6 +9,13 @@ const Cinnamon = imports.gi.Cinnamon;
 const St = imports.gi.St;
 const Signals = imports.signals;
 
+let Atspi;
+try {
+    Atspi = imports.gi.Atspi;
+} catch (e) {
+    Atspi = null;
+}
+
 const Main = imports.ui.main;
 const MagnifierDBus = imports.ui.magnifierDBus;
 const ZoomBridge = imports.ui.zoomBridge;
@@ -170,6 +177,10 @@ var Magnifier = class Magnifier {
 
         this._zoomBridge = ZoomBridge.getZoomBridge();
 
+        this._focusCaretTrackingActive = false;
+        this._focusListenerId = 0;
+        this._caretListenerId = 0;
+
         this._appSettings.connect('changed::' + SHOW_KEY,
             () => {
                 this.enabled = this._appSettings.get_boolean(SHOW_KEY);
@@ -269,14 +280,16 @@ var Magnifier = class Magnifier {
         this._propagateMouseTrackingToCompositor();
         if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
             this._showCompositorCrosshairs();
+        this._startFocusCaretTracking();
         this.emit('active-changed', activate);
         return;
     }
 
-        if (!activate && this._compositorZoomActive) {
-            this._zoomBridge.resetZoom();
-            this._compositorZoomActive = false;
-            this._hideCompositorCrosshairs();
+    if (!activate && this._compositorZoomActive) {
+        this._zoomBridge.resetZoom();
+        this._compositorZoomActive = false;
+        this._hideCompositorCrosshairs();
+        this._stopFocusCaretTracking();
             this.emit('active-changed', activate);
             return;
         }
@@ -802,6 +815,7 @@ var Magnifier = class Magnifier {
             this._zoomBridge.resetZoom();
             this._compositorZoomActive = false;
             this._hideCompositorCrosshairs();
+            this._stopFocusCaretTracking();
             this._initialize();
             this._zoomRegions[0].setScreenPosition(position);
             if (this.enabled) {
@@ -854,6 +868,7 @@ var Magnifier = class Magnifier {
             this._zoomBridge.resetZoom();
             this._compositorZoomActive = false;
             this._hideCompositorCrosshairs();
+            this._stopFocusCaretTracking();
             this._initialize();
             this._zoomRegions[0].setLensMode(this._settings.get_boolean(LENS_MODE_KEY));
             if (this.enabled) {
@@ -1632,7 +1647,106 @@ class Crosshairs extends Clutter.Actor {
         this.reCenter();
     }
 
-   /**
+    _startFocusCaretTracking() {
+        if (this._focusCaretTrackingActive || !Atspi)
+            return;
+        this._focusCaretTrackingActive = true;
+        try {
+            Atspi.init();
+        } catch (e) {
+            log('Magnifier: Atspi.init() failed: ' + e.message);
+            this._focusCaretTrackingActive = false;
+            return;
+        }
+        this._focusListenerId = Atspi.EventListener.new(
+            this._onAtspiFocus.bind(this));
+        this._focusListenerId.register('focus');
+        this._focusListenerId.register('object:state-changed:focused');
+
+        this._caretListenerId = Atspi.EventListener.new(
+            this._onAtspiCaret.bind(this));
+        this._caretListenerId.register('object:text-caret-moved');
+    }
+
+    _stopFocusCaretTracking() {
+        if (!this._focusCaretTrackingActive)
+            return;
+        if (this._focusListenerId) {
+            this._focusListenerId.deregister('focus');
+            this._focusListenerId.deregister('object:state-changed:focused');
+            this._focusListenerId = 0;
+        }
+        if (this._caretListenerId) {
+            this._caretListenerId.deregister('object:text-caret-moved');
+            this._caretListenerId = 0;
+        }
+        this._focusCaretTrackingActive = false;
+    }
+
+    _onAtspiFocus(event) {
+        if (!this._compositorZoomActive)
+            return;
+        let accessible = event.source;
+        if (!accessible)
+            return;
+        try {
+            let [x, y, width, height] = accessible.get_extents(Atspi.CoordType.SCREEN);
+            if (width <= 0 || height <= 0)
+                return;
+            let centerX = x + width / 2;
+            let centerY = y + height / 2;
+            this._centerCompositorViewportOn(centerX, centerY);
+        } catch (e) {
+        }
+    }
+
+    _onAtspiCaret(event) {
+        if (!this._compositorZoomActive)
+            return;
+        let accessible = event.source;
+        if (!accessible)
+            return;
+        try {
+            let [x, y, width, height] = accessible.get_extents(Atspi.CoordType.SCREEN);
+            if (width <= 0 || height <= 0)
+                return;
+            let textIface = accessible.queryText();
+            if (textIface) {
+                let offset = event.detail1;
+                let [cx, cy] = textIface.getCharacterExtents(offset, Atspi.CoordType.SCREEN);
+                if (cx >= 0 && cy >= 0) {
+                    this._centerCompositorViewportOn(cx, cy);
+                    return;
+                }
+            }
+            this._centerCompositorViewportOn(x + width / 2, y + height / 2);
+        } catch (e) {
+        }
+    }
+
+    _centerCompositorViewportOn(screenX, screenY) {
+        let monitorIndex = this._getMonitorAtPoint(screenX, screenY);
+        if (monitorIndex < 0)
+            return;
+        let monitors = Main.layoutManager.monitors;
+        let monitor = monitors[monitorIndex];
+        let localX = screenX - monitor.x;
+        let localY = screenY - monitor.y;
+        this._zoomBridge.setViewportForMonitor(monitorIndex, localX, localY);
+    }
+
+    _getMonitorAtPoint(x, y) {
+        let monitors = Main.layoutManager.monitors;
+        for (let i = 0; i < monitors.length; i++) {
+            let m = monitors[i];
+            if (x >= m.x && x < m.x + m.width &&
+                y >= m.y && y < m.y + m.height)
+                return i;
+        }
+        return 0;
+    }
+
+    /**
     * addToZoomRegion
     * Either add the crosshairs actor to the given ZoomRegion, or, if it is
     * already part of some other ZoomRegion, create a clone of the crosshairs

@@ -52,11 +52,16 @@ const MuffinZoomIface =
         <arg type="i" direction="in" /> \
         <arg type="b" direction="out" /> \
     </method> \
-    <method name="SetMouseTrackingForMonitor"> \
-        <arg type="i" direction="in" /> \
-        <arg type="i" direction="in" /> \
-    </method> \
-    </interface> \
+<method name="SetMouseTrackingForMonitor"> \
+    <arg type="i" direction="in" /> \
+    <arg type="i" direction="in" /> \
+  </method> \
+  <method name="SetViewportForMonitor"> \
+    <arg type="i" direction="in" /> \
+    <arg type="d" direction="in" /> \
+    <arg type="d" direction="in" /> \
+  </method> \
+</interface> \
     </node>';
 
 const MouseTrackingMode = {
@@ -197,12 +202,19 @@ var ZoomBridge = class ZoomBridge {
         });
     }
 
-    setMouseTrackingForMonitor(monitorIndex, mode) {
-        if (!this._available) return;
-        this._proxy.SetMouseTrackingForMonitorRemote(monitorIndex, mode, (result, error) => {
-            if (error) log('ZoomBridge.SetMouseTrackingForMonitor: ' + error.message);
-        });
-    }
+  setMouseTrackingForMonitor(monitorIndex, mode) {
+    if (!this._available) return;
+    this._proxy.SetMouseTrackingForMonitorRemote(monitorIndex, mode, (result, error) => {
+      if (error) log('ZoomBridge.SetMouseTrackingForMonitor: ' + error.message);
+    });
+  }
+
+  setViewportForMonitor(monitorIndex, viewportX, viewportY) {
+    if (!this._available) return;
+    this._proxy.SetViewportForMonitorRemote(monitorIndex, viewportX, viewportY, (result, error) => {
+      if (error) log('ZoomBridge.SetViewportForMonitor: ' + error.message);
+    });
+  }
 
     destroy() {
         this._proxy = null;
