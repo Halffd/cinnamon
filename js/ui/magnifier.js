@@ -73,11 +73,28 @@ const BRIGHTNESS_BLUE_KEY = 'brightness-blue';
 const CONTRAST_RED_KEY = 'contrast-red';
 const CONTRAST_GREEN_KEY = 'contrast-green';
 const CONTRAST_BLUE_KEY = 'contrast-blue';
+const ZOOM_SCOPE_KEY = 'zoom-scope';
+const ZOOM_STEP_KEY = 'zoom-step';
+const MIN_ZOOM_KEY = 'min-zoom';
+const MAX_ZOOM_KEY = 'max-zoom';
 
-const KEYBINDING_SCHEMA         = "org.cinnamon.desktop.keybindings"
-const ZOOM_IN_KEY               = "magnifier-zoom-in"
-const ZOOM_OUT_KEY              = "magnifier-zoom-out"
-const ZOOM_RESET_KEY            = "magnifier-zoom-reset"
+const KEYBINDING_SCHEMA = "org.cinnamon.desktop.keybindings"
+const ZOOM_IN_KEY = "magnifier-zoom-in"
+const ZOOM_OUT_KEY = "magnifier-zoom-out"
+const ZOOM_RESET_KEY = "magnifier-zoom-reset"
+const ZOOM_TOGGLE_KEY = "magnifier-toggle-zoom"
+const ZOOM_PREVIOUS_KEY = "magnifier-zoom-previous"
+const ZOOM_MODE_FULLSCREEN_KEY = "magnifier-zoom-mode-fullscreen"
+const ZOOM_MODE_LENS_KEY = "magnifier-zoom-mode-lens"
+const ZOOM_MODE_TOP_HALF_KEY = "magnifier-zoom-mode-top-half"
+const ZOOM_MODE_BOTTOM_HALF_KEY = "magnifier-zoom-mode-bottom-half"
+const ZOOM_MODE_LEFT_HALF_KEY = "magnifier-zoom-mode-left-half"
+const ZOOM_MODE_RIGHT_HALF_KEY = "magnifier-zoom-mode-right-half"
+const ZOOM_ON_TITLEBAR_KEY = "magnifier-zoom-on-titlebar"
+const ZOOM_ON_FULLSCREEN_KEY = "magnifier-zoom-on-fullscreen"
+const ZOOM_INCREASE_STEP_KEY = "magnifier-zoom-increase-step"
+const ZOOM_DECREASE_STEP_KEY = "magnifier-zoom-decrease-step"
+const ZOOM_RESET_STEP_KEY = "magnifier-zoom-reset-step"
 
 let magDBusService = null;
 var magInputHandler = null;
@@ -287,6 +304,10 @@ var Magnifier = class Magnifier {
       this._compositorZoomActive = true;
       this._propagateMouseTrackingToCompositor();
       this._propagateColorEffectsToCompositor();
+      this._propagateZoomScopeToCompositor();
+      this._propagateZoomStepToCompositor();
+      this._propagateMinZoomToCompositor();
+      this._propagateMaxZoomToCompositor();
         if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
             this._showCompositorCrosshairs();
         this._startFocusCaretTracking();
@@ -836,6 +857,18 @@ var Magnifier = class Magnifier {
     this._settings.connect('changed::' + CONTRAST_BLUE_KEY, () => {
       this._propagateColorEffectsToCompositor();
     });
+    this._settings.connect('changed::' + ZOOM_SCOPE_KEY, () => {
+      this._propagateZoomScopeToCompositor();
+    });
+    this._settings.connect('changed::' + ZOOM_STEP_KEY, () => {
+      this._propagateZoomStepToCompositor();
+    });
+    this._settings.connect('changed::' + MIN_ZOOM_KEY, () => {
+      this._propagateMinZoomToCompositor();
+    });
+    this._settings.connect('changed::' + MAX_ZOOM_KEY, () => {
+      this._propagateMaxZoomToCompositor();
+    });
 
         return ret > 1.0;
     }
@@ -985,6 +1018,61 @@ var Magnifier = class Magnifier {
         i, invertLightness, saturation,
         brightnessRed, brightnessGreen, brightnessBlue,
         contrastRed, contrastGreen, contrastBlue);
+    }
+  }
+
+  _propagateZoomScopeToCompositor() {
+    if (!this._zoomBridge.available)
+      return;
+    let scopeStr = this._settings.get_string(ZOOM_SCOPE_KEY);
+    let scope;
+    switch (scopeStr) {
+    case 'desktop':
+      scope = 1;
+      break;
+    case 'titlebar':
+      scope = 2;
+      break;
+    case 'taskbar':
+      scope = 3;
+      break;
+    default:
+      scope = 0;
+      break;
+    }
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      this._zoomBridge.setZoomScopeForMonitor(i, scope);
+    }
+  }
+
+  _propagateZoomStepToCompositor() {
+    if (!this._zoomBridge.available)
+      return;
+    let step = this._settings.get_double(ZOOM_STEP_KEY);
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      this._zoomBridge.setZoomStepForMonitor(i, step);
+    }
+  }
+
+  _propagateMinZoomToCompositor() {
+    if (!this._zoomBridge.available)
+      return;
+    let minZoom = this._settings.get_double(MIN_ZOOM_KEY);
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      this._zoomBridge.setMinZoomForMonitor(i, minZoom);
+    }
+  }
+
+  _propagateMaxZoomToCompositor() {
+    if (!this._zoomBridge.available)
+      return;
+    let maxZoom = this._settings.get_double(MAX_ZOOM_KEY);
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      this._zoomBridge.setMaxZoomForMonitor(i, maxZoom);
     }
   }
 };
@@ -2046,21 +2134,60 @@ var MagnifierInputHandler = class MagnifierInputHandler {
         this._zoomInId = 0;
         this._zoomOutId = 0;
 
-        Main.keybindingManager.removeHotKey("magnifier-zoom-in");
-        Main.keybindingManager.removeHotKey("magnifier-zoom-out");
-        Main.keybindingManager.removeHotKey("magnifier-zoom-reset");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-in");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-out");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-reset");
+    Main.keybindingManager.removeHotKey("magnifier-toggle-zoom");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-previous");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-fullscreen");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-lens");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-top-half");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-bottom-half");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-left-half");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-mode-right-half");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-on-titlebar");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-on-fullscreen");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-increase-step");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-decrease-step");
+    Main.keybindingManager.removeHotKey("magnifier-zoom-reset-step");
 
         this._zoomEnabled = false;
     }
 
-    _setupKeybindings() {
-        let kb = this.keybindingSettings.get_strv(ZOOM_IN_KEY);
-        Main.keybindingManager.addHotKeyArray("magnifier-zoom-in", kb, this._zoomIn.bind(this));
-        kb = this.keybindingSettings.get_strv(ZOOM_OUT_KEY);
-        Main.keybindingManager.addHotKeyArray("magnifier-zoom-out", kb, this._zoomOut.bind(this));
-        kb = this.keybindingSettings.get_strv(ZOOM_RESET_KEY);
-        Main.keybindingManager.addHotKeyArray("magnifier-zoom-reset", kb, this._zoomOut.bind(this));
-    }
+  _setupKeybindings() {
+    let kb = this.keybindingSettings.get_strv(ZOOM_IN_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-in", kb, this._zoomIn.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_OUT_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-out", kb, this._zoomOut.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_RESET_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-reset", kb, this._zoomReset.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_TOGGLE_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-toggle-zoom", kb, this._toggleZoom.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_PREVIOUS_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-previous", kb, this._zoomPrevious.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_FULLSCREEN_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-fullscreen", kb, this._setZoomModeFullscreen.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_LENS_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-lens", kb, this._setZoomModeLens.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_TOP_HALF_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-top-half", kb, this._setZoomModeTopHalf.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_BOTTOM_HALF_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-bottom-half", kb, this._setZoomModeBottomHalf.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_LEFT_HALF_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-left-half", kb, this._setZoomModeLeftHalf.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_MODE_RIGHT_HALF_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-mode-right-half", kb, this._setZoomModeRightHalf.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_ON_TITLEBAR_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-on-titlebar", kb, this._toggleZoomOnTitlebar.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_ON_FULLSCREEN_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-on-fullscreen", kb, this._toggleZoomOnFullscreen.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_INCREASE_STEP_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-increase-step", kb, this._increaseStep.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_DECREASE_STEP_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-decrease-step", kb, this._decreaseStep.bind(this));
+    kb = this.keybindingSettings.get_strv(ZOOM_RESET_STEP_KEY);
+    Main.keybindingManager.addHotKeyArray("magnifier-zoom-reset-step", kb, this._resetStep.bind(this));
+  }
 
     _refreshState() {
         this.zoomActive = this.magnifier.isActive();
@@ -2087,11 +2214,91 @@ var MagnifierInputHandler = class MagnifierInputHandler {
 
         if (this._zoomEnabled) {
             this._setupKeybindings();
-        }
+    }
+  }
+
+  _checkZoomScope() {
+    let scopeStr = this.magnifier._settings.get_string(ZOOM_SCOPE_KEY);
+    if (scopeStr === 'anywhere')
+      return true;
+
+    let [px, py] = global.get_pointer();
+
+    if (scopeStr === 'desktop') {
+      if (this._isPointerOverPanel(px, py) || this._isPointerOverPopupMenu(px, py))
+        return false;
+      return true;
     }
 
-    _zoomIn(display, screen, event, kb, action) {
-        if (this.zoomActive) {
+    if (scopeStr === 'titlebar') {
+      return this._isPointerOverTitlebar(px, py);
+    }
+
+    if (scopeStr === 'taskbar') {
+      return this._isPointerOverPanel(px, py);
+    }
+
+    return true;
+  }
+
+  _isPointerOverPanel(px, py) {
+    if (!Main.panelManager)
+      return false;
+    let panels = Main.panelManager.getPanels();
+    if (!panels)
+      return false;
+    for (let i = 0; i < panels.length; i++) {
+      let panel = panels[i];
+      if (!panel.actor || !panel.actor.mapped)
+        continue;
+      let [ok, x, y] = panel.actor.transform_point(0, 0);
+      let w = panel.actor.get_width();
+      let h = panel.actor.get_height();
+      if (px >= x && px < x + w && py >= y && py < y + h)
+        return true;
+    }
+    return false;
+  }
+
+  _isPointerOverPopupMenu(px, py) {
+    if (!global.menuStack || global.menuStack.length === 0)
+      return false;
+    for (let i = 0; i < global.menuStack.length; i++) {
+      let menu = global.menuStack[i];
+      if (!menu.actor || !menu.actor.mapped)
+        continue;
+      let [ok, x, y] = menu.actor.transform_point(0, 0);
+      let w = menu.actor.get_width();
+      let h = menu.actor.get_height();
+      if (px >= x && px < x + w && py >= y && py < y + h)
+        return true;
+    }
+    return false;
+  }
+
+  _isPointerOverTitlebar(px, py) {
+    let windows = global.display.get_tab_list(Meta.TabList.NORMAL, null);
+    if (!windows)
+      return false;
+    for (let i = 0; i < windows.length; i++) {
+      let win = windows[i];
+      let rect = win.get_frame_rect();
+      if (!rect)
+        continue;
+      if (px < rect.x || px >= rect.x + rect.width)
+        continue;
+      if (py < rect.y || py >= rect.y + rect.height)
+        continue;
+      let client_rect = win.get_client_rect();
+      if (client_rect && py < client_rect.y)
+        return true;
+    }
+    return false;
+  }
+
+  _zoomIn(display, screen, event, kb, action) {
+    if (!this._checkZoomScope()) return;
+    if (this.zoomActive) {
             this.currentZoom = Math.min(this.currentZoom * (1.0 + INCR), MAX_ZOOM);
         } else {
             this.currentZoom *= Math.min(this.currentZoom * (1.0 + INCR), MAX_ZOOM);
@@ -2105,8 +2312,9 @@ var MagnifierInputHandler = class MagnifierInputHandler {
         }
     }
 
-    _zoomOut(display, screen, event, kb, action) {
-        if (this.zoomActive) {
+  _zoomOut(display, screen, event, kb, action) {
+    if (!this._checkZoomScope()) return;
+    if (this.zoomActive) {
             this.currentZoom *= (1.0 - INCR);
             if (this.currentZoom <= 1.0) {
                 this.currentZoom = 1.0;
@@ -2121,17 +2329,131 @@ var MagnifierInputHandler = class MagnifierInputHandler {
         }
     }
 
-    _zoomReset(display, screen, event, kb, action) {
-        if (this.zoomActive) {
-            this.currentZoom = 1.0
-            this.magnifier.setActive(false);
-            this.zoomActive = false;
+  _zoomReset(display, screen, event, kb, action) {
+    if (this.zoomActive) {
+      this.currentZoom = 1.0
+      this.magnifier.setActive(false);
+      this.zoomActive = false;
 
-            try {
-                this.magnifier.setMagFactor(this.currentZoom, this.currentZoom)
-            } catch (e) {
-                this._refreshState();
-            }
-        }
+      try {
+        this.magnifier.setMagFactor(this.currentZoom, this.currentZoom)
+      } catch (e) {
+        this._refreshState();
+      }
     }
+  }
+
+  _getPointerMonitorIndex() {
+    let [px, py] = global.get_pointer();
+    return this.magnifier._getMonitorAtPoint(px, py);
+  }
+
+  _toggleZoom() {
+    let monitorIndex = this._getPointerMonitorIndex();
+    if (this.zoomActive) {
+      this.currentZoom = 1.0;
+      this.magnifier.setActive(false);
+      this.zoomActive = false;
+      try {
+        this.magnifier.setMagFactor(this.currentZoom, this.currentZoom);
+      } catch (e) {
+        this._refreshState();
+      }
+    } else {
+      this.currentZoom = this.magnifier._settings.get_double(MAG_FACTOR_KEY);
+      this.magnifier.setActive(true);
+      this.zoomActive = true;
+      try {
+        this.magnifier.setMagFactor(this.currentZoom, this.currentZoom);
+      } catch (e) {
+        this._refreshState();
+      }
+    }
+  }
+
+  _zoomPrevious() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.previousZoomForMonitor(monitorIndex);
+  }
+
+  _setZoomModeFullscreen() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.FULLSCREEN);
+  }
+
+  _setZoomModeLens() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.LENS);
+  }
+
+  _setZoomModeTopHalf() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.TOP_HALF);
+  }
+
+  _setZoomModeBottomHalf() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.BOTTOM_HALF);
+  }
+
+  _setZoomModeLeftHalf() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.LEFT_HALF);
+  }
+
+  _setZoomModeRightHalf() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, ZoomBridge.ZoomMode.RIGHT_HALF);
+  }
+
+  _toggleZoomOnTitlebar() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.getZoomScopeForMonitor(monitorIndex, (scope, error) => {
+      if (error) return;
+      let newScope = (scope === ZoomBridge.ZoomScope.TITLEBAR)
+        ? ZoomBridge.ZoomScope.ANYWHERE
+        : ZoomBridge.ZoomScope.TITLEBAR;
+      this.magnifier._zoomBridge.setZoomScopeForMonitor(monitorIndex, newScope);
+      this.magnifier._settings.set_string(ZOOM_SCOPE_KEY,
+        newScope === ZoomBridge.ZoomScope.TITLEBAR ? 'titlebar' : 'anywhere');
+    });
+  }
+
+  _toggleZoomOnFullscreen() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.getZoomModeForMonitor(monitorIndex, (mode, error) => {
+      if (error) return;
+      let newMode = (mode === ZoomBridge.ZoomMode.FULLSCREEN)
+        ? ZoomBridge.ZoomMode.LENS
+        : ZoomBridge.ZoomMode.FULLSCREEN;
+      this.magnifier._zoomBridge.setZoomModeForMonitor(monitorIndex, newMode);
+    });
+  }
+
+  _increaseStep() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.increaseStepForMonitor(monitorIndex);
+  }
+
+  _decreaseStep() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.decreaseStepForMonitor(monitorIndex);
+  }
+
+  _resetStep() {
+    if (!this.magnifier._zoomBridge.available) return;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this.magnifier._zoomBridge.resetStepForMonitor(monitorIndex);
+  }
 };

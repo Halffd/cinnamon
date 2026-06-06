@@ -106,8 +106,17 @@ class Module:
             widget = GSettingsComboBox(_("Mouse tracking mode"), "org.cinnamon.desktop.a11y.magnifier", "mouse-tracking", mouse_track_options)
             settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
 
-            switch = GSettingsSwitch(_("Lens mode"), "org.cinnamon.desktop.a11y.magnifier", "lens-mode")
-            settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+        switch = GSettingsSwitch(_("Lens mode"), "org.cinnamon.desktop.a11y.magnifier", "lens-mode")
+        settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+        zoom_scope_options = [["anywhere", _("Anywhere")],
+                              ["desktop", _("Desktop only (not over panels or menus)")],
+                              ["titlebar", _("Window titlebars only")],
+                              ["taskbar", _("Panel/taskbar only")]]
+
+        widget = GSettingsComboBox(_("Zoom scope"), "org.cinnamon.desktop.a11y.magnifier", "zoom-scope", zoom_scope_options)
+        widget.set_tooltip_text(_("Where Alt+Scroll zoom input is accepted"))
+        settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
 
             self.zoom_stack = SettingsStack()
             self.zoom_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
