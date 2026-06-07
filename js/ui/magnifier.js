@@ -998,7 +998,6 @@ var Magnifier = class Magnifier {
                 compositorMode = 0;
                 break;
         }
-        let monitorManager = Meta.MonitorManager.get();
         let monitors = Main.layoutManager.monitors;
         for (let i = 0; i < monitors.length; i++) {
       this._zoomBridge.setMouseTrackingForMonitor(i, compositorMode);
