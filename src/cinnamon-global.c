@@ -12,6 +12,7 @@
 #include <meta/util.h>
 #include <meta/main.h>
 #include <cogl-pango/cogl-pango.h>
+#include <clutter/x11/clutter-x11.h>
 
 #define GNOME_DESKTOP_USE_UNSTABLE_API
 #include <libcinnamon-desktop/gnome-systemd.h>
@@ -629,31 +630,31 @@ cinnamon_global_set_cursor (CinnamonGlobal *global,
   switch (type)
     {
     case CINNAMON_CURSOR_NOT_ALLOWED:
-      ret_curs = META_CURSOR_NOT_ALLOWED;
+      ret_curs = META_CURSOR_DND_UNSUPPORTED_TARGET;
       break;
     case CINNAMON_CURSOR_MOVE:
-      ret_curs = META_CURSOR_MOVE;
+      ret_curs = META_CURSOR_MOVE_OR_RESIZE_WINDOW;
       break;
     case CINNAMON_CURSOR_COPY:
-      ret_curs = META_CURSOR_COPY;
+      ret_curs = META_CURSOR_DND_COPY;
       break;
     case CINNAMON_CURSOR_NO_DROP:
-      ret_curs = META_CURSOR_NO_DROP;
+      ret_curs = META_CURSOR_DND_UNSUPPORTED_TARGET;
       break;
     case CINNAMON_CURSOR_POINTER:
-      ret_curs = META_CURSOR_POINTER;
+      ret_curs = META_CURSOR_POINTING_HAND;
       break;
     case CINNAMON_CURSOR_RESIZE_BOTTOM:
-      ret_curs = META_CURSOR_S_RESIZE;
+      ret_curs = META_CURSOR_SOUTH_RESIZE;
       break;
     case CINNAMON_CURSOR_RESIZE_TOP:
-      ret_curs = META_CURSOR_N_RESIZE;
+      ret_curs = META_CURSOR_NORTH_RESIZE;
       break;
     case CINNAMON_CURSOR_RESIZE_LEFT:
-      ret_curs = META_CURSOR_W_RESIZE;
+      ret_curs = META_CURSOR_WEST_RESIZE;
       break;
     case CINNAMON_CURSOR_RESIZE_RIGHT:
-      ret_curs = META_CURSOR_E_RESIZE;
+      ret_curs = META_CURSOR_EAST_RESIZE;
       break;
     case CINNAMON_CURSOR_RESIZE_BOTTOM_RIGHT:
       ret_curs = META_CURSOR_SE_RESIZE;
@@ -671,10 +672,10 @@ cinnamon_global_set_cursor (CinnamonGlobal *global,
       ret_curs = META_CURSOR_CROSSHAIR;
       break;
     case CINNAMON_CURSOR_TEXT:
-      ret_curs = META_CURSOR_TEXT;
+      ret_curs = META_CURSOR_IBEAM;
       break;
     case CINNAMON_CURSOR_GRABBING:
-      ret_curs = META_CURSOR_GRABBING;
+      ret_curs = META_CURSOR_DND_IN_DRAG;
       break;
     default:
       g_return_if_reached ();
@@ -804,7 +805,10 @@ cinnamon_global_get_background_actors (CinnamonGlobal *global)
 {
   g_return_val_if_fail (CINNAMON_IS_GLOBAL (global), NULL);
 
-  return meta_get_background_actors_for_display (global->meta_display);
+  ClutterActor *actor = meta_get_x11_background_actor_for_display (global->meta_display);
+  if (actor)
+    return g_list_append (NULL, actor);
+  return NULL;
 }
 
 static void
@@ -894,7 +898,7 @@ entry_cursor_func (StEntry  *entry,
   CinnamonGlobal *global = user_data;
 
   meta_display_set_cursor (global->meta_display,
-                           use_ibeam ? META_CURSOR_TEXT : META_CURSOR_DEFAULT);
+                            use_ibeam ? META_CURSOR_IBEAM : META_CURSOR_DEFAULT);
 }
 
 void
@@ -1517,15 +1521,15 @@ cinnamon_global_get_pointer (CinnamonGlobal         *global,
 {
   ClutterModifierType raw_mods;
   MetaCursorTracker *tracker;
-  graphene_point_t point;
+  int px, py;
 
   tracker = meta_cursor_tracker_get_for_display (global->meta_display);
-  meta_cursor_tracker_get_pointer (tracker, &point, &raw_mods);
+  meta_cursor_tracker_get_pointer (tracker, &px, &py, &raw_mods);
 
   if (x)
-    *x = point.x;
+    *x = px;
   if (y)
-    *y = point.y;
+    *y = py;
 
   *mods = raw_mods & CLUTTER_MODIFIER_MASK;
 }
@@ -1917,5 +1921,5 @@ cinnamon_global_get_stage_xwindow (CinnamonGlobal *global)
 {
     g_return_val_if_fail (CINNAMON_IS_GLOBAL (global), 0);
 
-    return meta_get_stage_xwindow (global->meta_display);
+    return 0;
 }

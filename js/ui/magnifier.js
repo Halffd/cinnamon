@@ -925,7 +925,6 @@ var Magnifier = class Magnifier {
         }
         this.setActive(this.enabled && magFactor > 1.0);
     }
-    }
 
     _updateLensMode() {
         let wasCompositor = this._compositorZoomActive;

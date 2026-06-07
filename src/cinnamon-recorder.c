@@ -578,16 +578,16 @@ on_cursor_changed (MetaCursorTracker *tracker,
 static void
 recorder_update_pointer (CinnamonRecorder *recorder)
 {
-  graphene_point_t coords;
+  int px, py;
 
-  meta_cursor_tracker_get_pointer (recorder->cursor_tracker, &coords, NULL);
+  meta_cursor_tracker_get_pointer (recorder->cursor_tracker, &px, &py, NULL);
 
-  if ((int) coords.x != recorder->pointer_x || (int) coords.y != recorder->pointer_y)
-    {
-      recorder->pointer_x = (int) coords.x;
-      recorder->pointer_y = (int) coords.y;
-      recorder_queue_redraw (recorder);
-    }
+  if (px != recorder->pointer_x || py != recorder->pointer_y)
+  {
+    recorder->pointer_x = px;
+    recorder->pointer_y = py;
+    recorder_queue_redraw (recorder);
+  }
 }
 
 static gboolean
