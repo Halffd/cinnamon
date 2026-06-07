@@ -299,8 +299,9 @@ var Magnifier = class Magnifier {
     if (activate && this._useCompositorZoom()) {
         let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
         if (factor <= 1.0)
-            factor = 2.0;
-        this._zoomBridge.setZoomLevel(factor);
+                factor = 2.0;
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.setZoomLevelForMonitor(monitorIndex, factor);
       this._compositorZoomActive = true;
       this._propagateMouseTrackingToCompositor();
       this._propagateColorEffectsToCompositor();
@@ -360,7 +361,8 @@ var Magnifier = class Magnifier {
      */
     setMagFactor(xMagFactor, yMagFactor) {
         if (this._useCompositorZoom()) {
-            this._zoomBridge.setZoomLevel(xMagFactor);
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.setZoomLevelForMonitor(monitorIndex, xMagFactor);
             this._compositorZoomActive = xMagFactor > 1.0;
 
             if (this.updateMagId > 0) {
@@ -879,7 +881,8 @@ var Magnifier = class Magnifier {
         let nowCompositor = this._useCompositorZoom();
 
         if (wasCompositor && !nowCompositor) {
-            this._zoomBridge.resetZoom();
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.resetZoomForMonitor(monitorIndex);
             this._compositorZoomActive = false;
             this._hideCompositorCrosshairs();
             this._stopFocusCaretTracking();
@@ -916,10 +919,11 @@ var Magnifier = class Magnifier {
     _updateMagFactor() {
         let magFactor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
         if (this._compositorZoomActive) {
-            this._zoomBridge.setZoomLevel(magFactor);
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.setZoomLevelForMonitor(monitorIndex, magFactor);
             this._compositorZoomActive = magFactor > 1.0;
             if (!this._compositorZoomActive)
-                this._zoomBridge.resetZoom();
+                this._zoomBridge.resetZoomForMonitor(monitorIndex);
         } else if (this._zoomRegions.length) {
             this._zoomRegions[0].setMagFactor(magFactor, magFactor);
         }
@@ -931,7 +935,8 @@ var Magnifier = class Magnifier {
         let nowCompositor = this._useCompositorZoom();
 
         if (wasCompositor && !nowCompositor) {
-            this._zoomBridge.resetZoom();
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.resetZoomForMonitor(monitorIndex);
             this._compositorZoomActive = false;
             this._hideCompositorCrosshairs();
             this._stopFocusCaretTracking();
@@ -1874,6 +1879,11 @@ class Crosshairs extends Clutter.Actor {
         let localX = screenX - monitor.x;
         let localY = screenY - monitor.y;
         this._zoomBridge.setViewportForMonitor(monitorIndex, localX, localY);
+    }
+
+    _getPointerMonitorIndex() {
+        let [px, py] = global.get_pointer();
+        return this._getMonitorAtPoint(px, py);
     }
 
     _getMonitorAtPoint(x, y) {
