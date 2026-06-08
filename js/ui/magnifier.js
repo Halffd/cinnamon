@@ -211,13 +211,22 @@ var Magnifier = class Magnifier {
                 this.enabled = this._appSettings.get_boolean(SHOW_KEY);
                 let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
                 if (this.enabled) {
-                    if (factor > 1.0)
+                    if (this._compositorZoomActive) {
+                        // Compositor already set this — just sync features
+                    } else if (factor > 1.0) {
                         this.setActive(true);
-                    else
+                    } else {
                         this._initialize();
+                    }
                 } else {
-                    if (this.isActive())
+                    if (this._compositorZoomActive) {
+                        this._compositorZoomActive = false;
+                        this._hideCompositorCrosshairs();
+                        this._stopFocusCaretTracking();
+                        this.emit('active-changed', false);
+                    } else if (this.isActive()) {
                         this.setActive(false);
+                    }
                 }
             });
 
@@ -297,18 +306,20 @@ var Magnifier = class Magnifier {
             return;
 
     if (activate && this._useCompositorZoom()) {
-        let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
-        if (factor <= 1.0)
+        if (!this._compositorZoomActive) {
+            let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+            if (factor <= 1.0)
                 factor = 2.0;
             let monitorIndex = this._getPointerMonitorIndex();
             this._zoomBridge.setZoomLevelForMonitor(monitorIndex, factor);
-      this._compositorZoomActive = true;
-      this._propagateMouseTrackingToCompositor();
-      this._propagateColorEffectsToCompositor();
-      this._propagateZoomScopeToCompositor();
-      this._propagateZoomStepToCompositor();
-      this._propagateMinZoomToCompositor();
-      this._propagateMaxZoomToCompositor();
+        }
+        this._compositorZoomActive = true;
+        this._propagateMouseTrackingToCompositor();
+        this._propagateColorEffectsToCompositor();
+        this._propagateZoomScopeToCompositor();
+        this._propagateZoomStepToCompositor();
+        this._propagateMinZoomToCompositor();
+        this._propagateMaxZoomToCompositor();
         if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
             this._showCompositorCrosshairs();
         this._startFocusCaretTracking();

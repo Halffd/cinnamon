@@ -496,10 +496,10 @@ ClassicSwitcher.prototype = {
     },
 
     _appEntered : function(appSwitcher, n) {
-        if (!this._mouseActive)
-            return;
-
-        this._select(n);
+        if (this._useWindowGrid && this._windowGrid)
+            this._select(n);
+        else if (this._mouseActive)
+            this._select(n);
     },
 
     _windowActivated : function(thumbnailList, n) {
@@ -1198,17 +1198,17 @@ WindowGrid.prototype = {
             itemContainer.add_actor(overlay);
             itemContainer._selectionOverlay = overlay;
 
-            let idx = i;
-            itemContainer.connect('button-press-event', Lang.bind(this, function() {
-                this._onItemClicked(idx);
-            }));
-            itemContainer.connect('enter-event', Lang.bind(this, function() {
-                this._onItemEnter(idx);
-            }));
+        let idx = i;
+        itemContainer.connect('button-press-event', Lang.bind(this, function() {
+            this._onItemClicked(idx);
+        }));
 
-            this._items.push(itemContainer);
-            this.actor.add_actor(itemContainer);
-        }
+        this._items.push(itemContainer);
+        this.actor.add_actor(itemContainer);
+    }
+
+    this._motionId = this.actor.connect('motion-event', Lang.bind(this, this._onMotion));
+    this._leaveId = this.actor.connect('leave-event', Lang.bind(this, this._onLeave));
 
         this._upArrow = new St.DrawingArea({ style_class: 'switcher-arrow',
                                               pseudo_class: 'highlighted' });
@@ -1435,7 +1435,77 @@ WindowGrid.prototype = {
         this.emit('item-entered', index);
     },
 
+    _onMotion: function(actor, event) {
+        let [stageX, stageY] = event.get_coords();
+        let success, ax, ay;
+        [success, ax, ay] = this.actor.transform_stage_point(stageX, stageY);
+        if (!success) return Clutter.EVENT_PROPAGATE;
+
+        for (let i = 0; i < this._items.length; i++) {
+            let item = this._items[i];
+            let alloc = item.allocation;
+            if (ax >= alloc.x1 && ax < alloc.x2 && ay >= alloc.y1 && ay < alloc.y2) {
+                if (this._highlighted !== i) {
+                    this.emit('item-entered', i);
+                }
+                break;
+            }
+        }
+
+        if (this._canScrollUp || this._canScrollDown) {
+            let monitor = this._activeMonitor;
+            let availHeight = Math.round(monitor.height * WINDOW_GRID_SCALE);
+            let gridOffsetY = Math.floor((monitor.height - availHeight) / 2);
+            let arrowZone = 36;
+            let localY = ay - gridOffsetY;
+            if (this._canScrollUp && localY >= 0 && localY < arrowZone) {
+                this._startArrowScroll('up');
+            } else if (this._canScrollDown && localY > availHeight - arrowZone && localY <= availHeight) {
+                this._startArrowScroll('down');
+            } else {
+                this._stopArrowScroll();
+            }
+        }
+
+        return Clutter.EVENT_PROPAGATE;
+    },
+
+    _onLeave: function() {
+        this._stopArrowScroll();
+    },
+
+    _startArrowScroll: function(direction) {
+        if (this._arrowScrollDirection === direction && this._arrowScrollId > 0)
+            return;
+        this._stopArrowScroll();
+        this._arrowScrollDirection = direction;
+        this._arrowScrollId = Mainloop.timeout_add(80, Lang.bind(this, function() {
+            if (direction === 'up')
+                this.scrollUp();
+            else
+                this.scrollDown();
+            return true;
+        }));
+    },
+
+    _stopArrowScroll: function() {
+        this._arrowScrollDirection = null;
+        if (this._arrowScrollId > 0) {
+            Mainloop.source_remove(this._arrowScrollId);
+            this._arrowScrollId = 0;
+        }
+    },
+
     destroy: function() {
+        this._stopArrowScroll();
+        if (this._motionId > 0) {
+            this.actor.disconnect(this._motionId);
+            this._motionId = 0;
+        }
+        if (this._leaveId > 0) {
+            this.actor.disconnect(this._leaveId);
+            this._leaveId = 0;
+        }
         this.actor.destroy();
     }
 };
