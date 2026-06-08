@@ -106,17 +106,29 @@ class Module:
             widget = GSettingsComboBox(_("Mouse tracking mode"), "org.cinnamon.desktop.a11y.magnifier", "mouse-tracking", mouse_track_options)
             settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
 
-        switch = GSettingsSwitch(_("Lens mode"), "org.cinnamon.desktop.a11y.magnifier", "lens-mode")
-        settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+            switch = GSettingsSwitch(_("Lens mode"), "org.cinnamon.desktop.a11y.magnifier", "lens-mode")
+            settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
 
-        zoom_scope_options = [["anywhere", _("Anywhere")],
-                              ["desktop", _("Desktop only (not over panels or menus)")],
-                              ["titlebar", _("Window titlebars only")],
-                              ["taskbar", _("Panel/taskbar only")]]
+            zoom_scope_options = [["anywhere", _("Anywhere")],
+                                    ["desktop", _("Desktop only (not over panels or menus)")],
+                                    ["titlebar", _("Window titlebars only")],
+                                    ["taskbar", _("Panel/taskbar only")]]
 
-        widget = GSettingsComboBox(_("Zoom scope"), "org.cinnamon.desktop.a11y.magnifier", "zoom-scope", zoom_scope_options)
-        widget.set_tooltip_text(_("Where Alt+Scroll zoom input is accepted"))
-        settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+            widget = GSettingsComboBox(_("Zoom scope"), "org.cinnamon.desktop.a11y.magnifier", "zoom-scope", zoom_scope_options)
+            widget.set_tooltip_text(_("Where Alt+Scroll zoom input is accepted"))
+            settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Zoom step"), "org.cinnamon.desktop.a11y.magnifier", "zoom-step",
+                                     _("Smaller"), _("Larger"), 1.1, 4.0, step=0.1, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Minimum zoom"), "org.cinnamon.desktop.a11y.magnifier", "min-zoom",
+                                     _("1.0x"), _("4.0x"), 1.0, 4.0, step=0.1, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Maximum zoom"), "org.cinnamon.desktop.a11y.magnifier", "max-zoom",
+                                     _("2.0x"), _("32.0x"), 2.0, 32.0, step=0.5, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
 
             self.zoom_stack = SettingsStack()
             self.zoom_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
@@ -128,11 +140,11 @@ class Module:
             widget = GSettingsComboBox(_("Lens shape"), "org.cinnamon.desktop.a11y.magnifier", "lens-shape", lens_shape_options)
             self.zoom_stack.add_named(widget, "shape")
 
-        screen_pos_options = [["full-screen", _("Full screen (compositor)")],
-                               ["top-half", _("Top half")],
-                               ["bottom-half", _("Bottom half")],
-                               ["left-half", _("Left half")],
-                               ["right-half", _("Right half")]]
+            screen_pos_options = [["full-screen", _("Full screen (compositor)")],
+                                    ["top-half", _("Top half")],
+                                    ["bottom-half", _("Bottom half")],
+                                    ["left-half", _("Left half")],
+                                    ["right-half", _("Right half")]]
 
             widget = GSettingsComboBox(_("Screen position"), "org.cinnamon.desktop.a11y.magnifier", "screen-position", screen_pos_options)
             self.zoom_stack.add_named(widget, "screen")
