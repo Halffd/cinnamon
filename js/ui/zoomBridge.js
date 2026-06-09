@@ -7,148 +7,149 @@ const Signals = imports.signals;
 const MUFFIN_ZOOM_SERVICE = 'org.cinnamon.Muffin.Zoom';
 const MUFFIN_ZOOM_PATH = '/org/cinnamon/Muffin/Zoom';
 
-const MuffinZoomIface = \
-'<node> \
-<interface name="org.cinnamon.Muffin.Zoom"> \
-<method name="ZoomIn"> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="ZoomOut"> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="ResetZoom"> \
-</method> \
-<method name="SetZoomLevel"> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetZoomLevel"> \
-<arg type="d" direction="out" /> \
-</method> \
-<method name="GetZoomActive"> \
-<arg type="b" direction="out" /> \
-</method> \
-<method name="ToggleZoomMode"> \
-</method> \
-<method name="ToggleZoom"> \
-</method> \
-<method name="ZoomInForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="ZoomOutForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="ResetZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="SetZoomLevelForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetZoomLevelForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="out" /> \
-</method> \
-<method name="GetZoomActiveForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="b" direction="out" /> \
-</method> \
-<method name="SetMouseTrackingForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="SetViewportForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="SetColorEffectsForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="b" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="SetZoomScopeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="GetZoomScopeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="i" direction="out" /> \
-</method> \
-<method name="ToggleZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="SetZoomModeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="GetZoomModeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="i" direction="out" /> \
-</method> \
-<method name="SetZoomSizeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetZoomSizeForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="out" /> \
-<arg type="d" direction="out" /> \
-</method> \
-<method name="PreviousZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="SetZoomOnTitlebarForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="b" direction="in" /> \
-</method> \
-<method name="SetZoomOnFullscreenForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="b" direction="in" /> \
-</method> \
-<method name="SetZoomStepForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetZoomStepForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="out" /> \
-</method> \
-<method name="IncreaseStepForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="DecreaseStepForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="ResetStepForMonitor"> \
-<arg type="i" direction="in" /> \
-</method> \
-<method name="SetMinZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetMinZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="out" /> \
-</method> \
-<method name="SetMaxZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="in" /> \
-</method> \
-<method name="GetMaxZoomForMonitor"> \
-<arg type="i" direction="in" /> \
-<arg type="d" direction="out" /> \
-</method> \
-</interface> \
-</node>';
+const MuffinZoomIface = `
+<node>
+<interface name="org.cinnamon.Muffin.Zoom">
+<method name="ZoomIn">
+<arg type="d" direction="in" />
+</method>
+<method name="ZoomOut">
+<arg type="d" direction="in" />
+</method>
+<method name="ResetZoom">
+</method>
+<method name="SetZoomLevel">
+<arg type="d" direction="in" />
+</method>
+<method name="GetZoomLevel">
+<arg type="d" direction="out" />
+</method>
+<method name="GetZoomActive">
+<arg type="b" direction="out" />
+</method>
+<method name="ToggleZoomMode">
+</method>
+<method name="ToggleZoom">
+</method>
+<method name="ZoomInForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="ZoomOutForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="ResetZoomForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="SetZoomLevelForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="GetZoomLevelForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="out" />
+</method>
+<method name="GetZoomActiveForMonitor">
+<arg type="i" direction="in" />
+<arg type="b" direction="out" />
+</method>
+<method name="SetMouseTrackingForMonitor">
+<arg type="i" direction="in" />
+<arg type="i" direction="in" />
+</method>
+<method name="SetViewportForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="SetColorEffectsForMonitor">
+<arg type="i" direction="in" />
+<arg type="b" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="SetZoomScopeForMonitor">
+<arg type="i" direction="in" />
+<arg type="i" direction="in" />
+</method>
+<method name="GetZoomScopeForMonitor">
+<arg type="i" direction="in" />
+<arg type="i" direction="out" />
+</method>
+<method name="ToggleZoomForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="SetZoomModeForMonitor">
+<arg type="i" direction="in" />
+<arg type="i" direction="in" />
+</method>
+<method name="GetZoomModeForMonitor">
+<arg type="i" direction="in" />
+<arg type="i" direction="out" />
+</method>
+<method name="SetZoomSizeForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="GetZoomSizeForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="out" />
+<arg type="d" direction="out" />
+</method>
+<method name="PreviousZoomForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="SetZoomOnTitlebarForMonitor">
+<arg type="i" direction="in" />
+<arg type="b" direction="in" />
+</method>
+<method name="SetZoomOnFullscreenForMonitor">
+<arg type="i" direction="in" />
+<arg type="b" direction="in" />
+</method>
+<method name="SetZoomStepForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="GetZoomStepForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="out" />
+</method>
+<method name="IncreaseStepForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="DecreaseStepForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="ResetStepForMonitor">
+<arg type="i" direction="in" />
+</method>
+<method name="SetMinZoomForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="GetMinZoomForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="out" />
+</method>
+<method name="SetMaxZoomForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="in" />
+</method>
+<method name="GetMaxZoomForMonitor">
+<arg type="i" direction="in" />
+<arg type="d" direction="out" />
+</method>
+</interface>
+    </node>
+`;
 
 const MouseTrackingMode = {
   CENTERED: 0,
