@@ -162,6 +162,65 @@ class Module:
             else:
                 self.zoom_stack.set_visible_child_name("screen")
 
+
+            # Crosshairs
+
+            settings = page.add_section(_("Crosshairs"))
+
+            switch = GSettingsSwitch(_("Show crosshairs"), "org.cinnamon.desktop.a11y.magnifier", "show-cross-hairs")
+            settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            widget = GSettingsSpinButton(_("Thickness"), "org.cinnamon.desktop.a11y.magnifier", "cross-hairs-thickness", _("px"), 1, 100, step=1)
+            settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            widget = GSettingsColorChooser(_("Color"), "org.cinnamon.desktop.a11y.magnifier", "cross-hairs-color", legacy_string=True)
+            settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Opacity"), "org.cinnamon.desktop.a11y.magnifier", "cross-hairs-opacity",
+                                     _("Transparent"), _("Opaque"), 0.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            widget = GSettingsSpinButton(_("Length"), "org.cinnamon.desktop.a11y.magnifier", "cross-hairs-length", _("px"), 20, 4096, step=1)
+            settings.add_reveal_row(widget, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            switch = GSettingsSwitch(_("Clip crosshairs at center"), "org.cinnamon.desktop.a11y.magnifier", "cross-hairs-clip")
+            settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            # Color Effects
+
+            settings = page.add_section(_("Color Effects"))
+
+            switch = GSettingsSwitch(_("Invert lightness"), "org.cinnamon.desktop.a11y.magnifier", "invert-lightness")
+            settings.add_reveal_row(switch, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Saturation"), "org.cinnamon.desktop.a11y.magnifier", "color-saturation",
+                                     _("Grayscale"), _("Full color"), 0.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Brightness (red)"), "org.cinnamon.desktop.a11y.magnifier", "brightness-red",
+                                     _("Darker"), _("Brighter"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Brightness (green)"), "org.cinnamon.desktop.a11y.magnifier", "brightness-green",
+                                     _("Darker"), _("Brighter"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Brightness (blue)"), "org.cinnamon.desktop.a11y.magnifier", "brightness-blue",
+                                     _("Darker"), _("Brighter"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Contrast (red)"), "org.cinnamon.desktop.a11y.magnifier", "contrast-red",
+                                     _("Lower"), _("Higher"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Contrast (green)"), "org.cinnamon.desktop.a11y.magnifier", "contrast-green",
+                                     _("Lower"), _("Higher"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
+            slider = GSettingsRange(_("Contrast (blue)"), "org.cinnamon.desktop.a11y.magnifier", "contrast-blue",
+                                     _("Lower"), _("Higher"), -1.0, 1.0, step=0.01, show_value=True)
+            settings.add_reveal_row(slider, "org.cinnamon.desktop.a11y.applications", "screen-magnifier-enabled")
+
 #### Keyboard
 
             page = SettingsPage()
