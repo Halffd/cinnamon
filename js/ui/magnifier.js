@@ -1089,6 +1089,22 @@ var Magnifier = class Magnifier {
       this._zoomBridge.setMaxZoomForMonitor(i, maxZoom);
     }
   }
+
+  _getPointerMonitorIndex() {
+    let [px, py] = global.get_pointer();
+    return this._getMonitorAtPoint(px, py);
+  }
+
+  _getMonitorAtPoint(x, y) {
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      let m = monitors[i];
+      if (x >= m.x && x < m.x + m.width &&
+          y >= m.y && y < m.y + m.height)
+        return i;
+    }
+    return 0;
+  }
 };
 Signals.addSignalMethods(Magnifier.prototype);
 
@@ -2364,7 +2380,14 @@ var MagnifierInputHandler = class MagnifierInputHandler {
 
   _getPointerMonitorIndex() {
     let [px, py] = global.get_pointer();
-    return this.magnifier._getMonitorAtPoint(px, py);
+    let monitors = Main.layoutManager.monitors;
+    for (let i = 0; i < monitors.length; i++) {
+      let m = monitors[i];
+      if (px >= m.x && px < m.x + m.width &&
+          py >= m.y && py < m.y + m.height)
+        return i;
+    }
+    return 0;
   }
 
   _toggleZoom() {
