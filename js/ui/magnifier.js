@@ -77,6 +77,7 @@ const ZOOM_SCOPE_KEY = 'zoom-scope';
 const ZOOM_STEP_KEY = 'zoom-step';
 const MIN_ZOOM_KEY = 'min-zoom';
 const MAX_ZOOM_KEY = 'max-zoom';
+const COMPOSITOR_ZOOM_ENABLED_KEY = 'compositor-zoom-enabled';
 
 const KEYBINDING_SCHEMA = "org.cinnamon.desktop.keybindings"
 const ZOOM_IN_KEY = "magnifier-zoom-in"
@@ -201,6 +202,10 @@ var Magnifier = class Magnifier {
         this._compositorZoomActive = false;
 
         this._zoomBridge = ZoomBridge.getZoomBridge();
+        this._zoomBridge.connect('available', () => {
+            if (this.isActive() && !this._compositorZoomActive)
+                this._switchToCompositorZoom();
+        });
 
         this._focusCaretTrackingActive = false;
         this._focusListenerId = 0;
@@ -288,6 +293,8 @@ var Magnifier = class Magnifier {
 
     _useCompositorZoom() {
         if (!this._zoomBridge.available)
+            return false;
+        if (!this._settings.get_boolean(COMPOSITOR_ZOOM_ENABLED_KEY))
             return false;
         if (this._zoomRegions.length === 0)
             return true;
@@ -883,6 +890,10 @@ var Magnifier = class Magnifier {
       this._propagateMaxZoomToCompositor();
     });
 
+    this._settings.connect('changed::' + COMPOSITOR_ZOOM_ENABLED_KEY, () => {
+      this._updateZoomEngine();
+    });
+
         return ret > 1.0;
     }
 
@@ -966,6 +977,35 @@ var Magnifier = class Magnifier {
             this.setActive(true);
         } else if (this._zoomRegions.length) {
             this._zoomRegions[0].setLensMode(this._settings.get_boolean(LENS_MODE_KEY));
+        }
+    }
+
+    _updateZoomEngine() {
+        let wasCompositor = this._compositorZoomActive;
+        let nowCompositor = this._useCompositorZoom();
+
+        if (wasCompositor && !nowCompositor) {
+            let monitorIndex = this._getPointerMonitorIndex();
+            this._zoomBridge.resetZoomForMonitor(monitorIndex);
+            this._compositorZoomActive = false;
+            this._hideCompositorCrosshairs();
+            this._stopFocusCaretTracking();
+            this._initialize();
+            if (this._zoomRegions.length) {
+                this._zoomRegions[0].setScreenPosition(this._settings.get_enum(SCREEN_POSITION_KEY));
+                this._zoomRegions[0].setLensMode(this._settings.get_boolean(LENS_MODE_KEY));
+            }
+            if (this.enabled) {
+                let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+                this._zoomRegions[0].setMagFactor(factor, factor);
+                this._zoomRegions[0].setActive(true);
+                this.startTrackingMouse();
+            }
+        } else if (!wasCompositor && nowCompositor && this.enabled) {
+            if (this._zoomRegions.length)
+                this._zoomRegions[0].setActive(false);
+            this.stopTrackingMouse();
+            this.setActive(true);
         }
     }
 
@@ -1088,6 +1128,37 @@ var Magnifier = class Magnifier {
     for (let i = 0; i < monitors.length; i++) {
       this._zoomBridge.setMaxZoomForMonitor(i, maxZoom);
     }
+  }
+
+  _switchToCompositorZoom() {
+    if (this._compositorZoomActive || !this._zoomBridge.available)
+      return;
+
+    if (this._initialized) {
+      this._zoomRegions.forEach(zr => {
+        if (zr.isActive()) zr.setActive(false);
+      });
+      this.stopTrackingMouse();
+      if (this._cursorTracker)
+        this._cursorTracker.set_pointer_visible(true);
+    }
+
+    let factor = parseFloat(this._settings.get_double(MAG_FACTOR_KEY).toFixed(2));
+    if (factor <= 1.0)
+      factor = 2.0;
+
+    this._compositorZoomActive = true;
+    let monitorIndex = this._getPointerMonitorIndex();
+    this._zoomBridge.setZoomLevelForMonitor(monitorIndex, factor);
+    this._propagateMouseTrackingToCompositor();
+    this._propagateColorEffectsToCompositor();
+    this._propagateZoomScopeToCompositor();
+    this._propagateZoomStepToCompositor();
+    this._propagateMinZoomToCompositor();
+    this._propagateMaxZoomToCompositor();
+    if (this._settings.get_boolean(SHOW_CROSS_HAIRS_KEY))
+      this._showCompositorCrosshairs();
+    this._startFocusCaretTracking();
   }
 
   _getPointerMonitorIndex() {
@@ -2155,8 +2226,8 @@ var MagnifierInputHandler = class MagnifierInputHandler {
     _enableZoom() {
         if (this._zoomInId > 0 || this._zoomOutId > 0)
             this._disableZoom();
-        this._zoomInId = global.display.connect('zoom-scroll-in', this._zoomIn.bind(this));
-        this._zoomOutId = global.display.connect('zoom-scroll-out', this._zoomOut.bind(this));
+        this._zoomInId = global.display.connect('zoom-scroll-in', this._onZoomScrollIn.bind(this));
+        this._zoomOutId = global.display.connect('zoom-scroll-out', this._onZoomScrollOut.bind(this));
         this._zoomEnabled = true;
     }
 
@@ -2329,6 +2400,26 @@ var MagnifierInputHandler = class MagnifierInputHandler {
         return true;
     }
     return false;
+  }
+
+  _onZoomScrollIn() {
+    if (!this._checkZoomScope()) return;
+    this.magnifier._zoomBridge.getZoomLevelForMonitor(
+      this._getPointerMonitorIndex(),
+      (level, error) => {
+        if (!error) this.currentZoom = level;
+        this.zoomActive = this.currentZoom > 1.0;
+      });
+  }
+
+  _onZoomScrollOut() {
+    if (!this._checkZoomScope()) return;
+    this.magnifier._zoomBridge.getZoomLevelForMonitor(
+      this._getPointerMonitorIndex(),
+      (level, error) => {
+        if (!error) this.currentZoom = level;
+        this.zoomActive = this.currentZoom > 1.0;
+      });
   }
 
   _zoomIn(display, screen, event, kb, action) {
