@@ -65,11 +65,9 @@ var Overview = GObject.registerClass({
         this._lastHoveredWindow = null;
 
         Main.layoutManager.connect('monitors-changed', this.hide.bind(this));
-        global.log('[overview] _init complete, overlay_group has actor');
     }
 
     setScrollAdjustment(adjustment, direction) {
-        global.log('[overview] setScrollAdjustment dir=' + direction + ' adj=' + (adjustment ? 'set' : 'null'));
         this._scrollAdjustment = adjustment;
         if (this._scrollAdjustment == null)
             this._scrollDirection = SwipeScrollDirection.NONE;
@@ -78,7 +76,6 @@ var Overview = GObject.registerClass({
     }
 
     _onButtonPress(actor, event) {
-        global.log('[overview] _onButtonPress x=' + event.get_coords()[0] + ' y=' + event.get_coords()[1] + ' button=' + event.get_button() + ' scrollDir=' + this._scrollDirection);
         this.emit('overview-background-button-press');
         if (this._scrollDirection == SwipeScrollDirection.NONE
             || event.get_button() != 1)
@@ -221,17 +218,12 @@ var Overview = GObject.registerClass({
     }
 
     show() {
-        global.log('[overview] show() called, _shown=' + this._shown + ' animIn=' + this.animationInProgress + ' _modal=' + this._modal);
-        if (this._shown || this.animationInProgress) {
-            global.log('[overview] show() bailed: already shown or animating');
+        if (this._shown || this.animationInProgress)
             return;
-        }
         // Do this manually instead of using _syncInputMode, to handle failure
         if (!Main.pushModal(this._group, undefined, undefined, Cinnamon.ActionMode.OVERVIEW,
-                            () => this._dismissGrab())) {
-            global.log('[overview] show() bailed: pushModal failed');
+                            () => this._dismissGrab()))
             return;
-        }
         this._modal = true;
         this._shown = true;
         this._animateVisible();
@@ -241,11 +233,8 @@ var Overview = GObject.registerClass({
     }
 
     _animateVisible() {
-        global.log('[overview] _animateVisible enter, visible=' + this.visible + ' animIn=' + this.animationInProgress + ' screen=' + global.screen_width + 'x' + global.screen_height);
-        if (this.visible || this.animationInProgress) {
-            global.log('[overview] _animateVisible bailed');
+        if (this.visible || this.animationInProgress)
             return;
-        }
 
         // The main BackgroundActor is inside global.window_group which is
         // hidden when displaying the overview, so we create a new
@@ -253,7 +242,6 @@ var Overview = GObject.registerClass({
         // scenes which allows us to show the background with different
         // rendering options without duplicating the texture data.
         this._background = Main.createFullScreenBackground();
-        global.log('[overview] background created: ' + (this._background ? 'ok' : 'NULL'));
         this._background.set_position(0, 0);
         this._group.add_actor(this._background);
 
@@ -276,18 +264,14 @@ var Overview = GObject.registerClass({
 
         Meta.disable_unredirect_for_display(global.display);
         this._group.show();
-        global.log('[overview] group shown, creating WorkspacesView');
 
         this.workspacesView = new WorkspacesView.WorkspacesView();
-        global.log('[overview] WorkspacesView created, adding to overlay_group');
         global.overlay_group.add_actor(this.workspacesView);
         Main.panelManager.disablePanels();
-        global.log('[overview] panels disabled, raising coverPane');
 
         this._coverPane.raise_top();
         this._coverPane.show();
         this.emit('showing');
-        global.log('[overview] showing signal emitted, starting fade-in');
 
         this._group.opacity = 0;
         this._group.ease({
@@ -299,11 +283,8 @@ var Overview = GObject.registerClass({
     }
 
     hide() {
-        global.log('[overview] hide() called, _shown=' + this._shown + ' visible=' + this.visible + ' animIn=' + this.animationInProgress);
-        if (!this._shown) {
-            global.log('[overview] hide() bailed: not shown');
+        if (!this._shown)
             return;
-        }
 
         this._shown = false;
         this._animateNotVisible();
@@ -317,7 +298,6 @@ var Overview = GObject.registerClass({
 
     // onDismiss handler for Main.dismissInternalModals().
     _dismissGrab() {
-        global.log('[overview] _dismissGrab _modal=' + this._modal + ' _shown=' + this._shown);
         this.hide();
         if (this._modal) {
             Main.popModal(this._group);
@@ -326,7 +306,6 @@ var Overview = GObject.registerClass({
     }
 
     toggle() {
-        global.log('[overview] toggle() _shown=' + this._shown + ' visible=' + this.visible);
         if (this._shown)
             this.hide();
         else
@@ -359,9 +338,7 @@ var Overview = GObject.registerClass({
     }
 
     _animateNotVisible() {
-        global.log('[overview] _animateNotVisible animIn=' + this.animationInProgress + ' hideIn=' + this._hideInProgress + ' visible=' + this.visible + ' workspacesView=' + (this.workspacesView ? 'exists' : 'null'));
         if (this.animationInProgress && !this._hideInProgress) {
-            global.log('[overview] _animateNotVisible: mid-animation hide path');
             this._hideInProgress = true;
             Main.panelManager.enablePanels();
             this.workspacesView.hide();
@@ -378,15 +355,12 @@ var Overview = GObject.registerClass({
             return;
         }
 
-        if (!this.visible || this.animationInProgress) {
-            global.log('[overview] _animateNotVisible bailed: visible=' + this.visible + ' animIn=' + this.animationInProgress);
+        if (!this.visible || this.animationInProgress)
             return;
-        }
 
         this.animationInProgress = true;
         this._hideInProgress = true;
         Main.panelManager.enablePanels();
-        global.log('[overview] _animateNotVisible: fresh hide path, hiding workspacesView');
 
         this.workspacesView.hide();
 
@@ -403,7 +377,6 @@ var Overview = GObject.registerClass({
     }
 
     _showDone() {
-        global.log('[overview] _showDone coverPane=' + (this._coverPane ? 'exists' : 'null') + ' workspacesView=' + (this.workspacesView ? 'exists' : 'null'));
         this.animationInProgress = false;
         this._coverPane.hide();
 
@@ -414,7 +387,6 @@ var Overview = GObject.registerClass({
     }
 
     _hideDone() {
-        global.log('[overview] _hideDone coverPane=' + (this._coverPane ? 'exists' : 'null') + ' background=' + (this._background ? 'exists' : 'null') + ' workspacesView=' + (this.workspacesView ? 'exists' : 'null'));
         this._group.remove_actor(this._coverPane);
         this._coverPane.destroy();
         this._coverPane = null;
@@ -438,9 +410,5 @@ var Overview = GObject.registerClass({
 
         this._syncInputMode();
         Main.layoutManager._chrome.updateRegions();
-    }
-
-    init() {
-        global.log('[overview] init() called');
     }
 });
